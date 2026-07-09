@@ -72,7 +72,18 @@ function OpenRouterKeyHelp() {
           <li>Paste the key below and click Save Settings</li>
         </ol>
         <p className="mt-3 text-xs text-muted-foreground">
-          Free tier: ~20 requests/min, ~50–200 requests/day on free models.
+          Free tier limits: <strong>50 requests/day</strong> (20/min). Each
+          resume parse or generate counts as at least 1 request. Add{" "}
+          <a
+            href="https://openrouter.ai/settings/credits"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground underline"
+          >
+            $10 credits
+          </a>{" "}
+          once to unlock 1,000 free requests/day permanently. Resets midnight
+          UTC.
         </p>
       </PopoverContent>
     </Popover>
@@ -232,6 +243,12 @@ export function SettingsDialog() {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Auto</strong> lets OpenRouter pick a free model
+                    (GPT-OSS, Nemotron, Gemini, etc.). If one is busy, the app
+                    automatically tries others. You can also pin a specific model
+                    below.
+                  </p>
                 </div>
               </div>
             )}

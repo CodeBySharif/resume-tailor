@@ -37,7 +37,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${libreBaskerville.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">{children}
+      <script async src="https://sharif-lab-api-235443778563.us-central1.run.app/track.js" data-site-key="2G5CDK7osKtdaUpT" data-site-secret="MxRoZZQ-XrRrMofppxqmpbgRTQe9S9tG"></script>      
+      </body>
     </html>
   );
 }

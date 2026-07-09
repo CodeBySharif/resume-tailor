@@ -71,7 +71,9 @@ function loadSettingsFromStorage(): LLMSettings {
       };
       if (!parsed.groqApiKey) parsed.groqApiKey = "";
       if (!parsed.openrouterApiKey) parsed.openrouterApiKey = "";
-      if (!parsed.openrouterModel) parsed.openrouterModel = "openrouter/free";
+      if (!parsed.openrouterModel) {
+        parsed.openrouterModel = "openrouter/free";
+      }
       return parsed;
     }
   } catch {
