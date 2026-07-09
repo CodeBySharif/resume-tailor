@@ -11,10 +11,27 @@ import { FormSection } from "./FormSection";
 import { MonthYearInput } from "./MonthYearInput";
 import { ReorderButtons } from "./ReorderButtons";
 import { ResumePreview } from "./ResumePreview";
-import { createId } from "@/lib/resume-schema";
+import { createId, getProjectBullets, projectDescriptionFromBullets } from "@/lib/resume-schema";
 import { moveArrayItem } from "@/lib/array-utils";
 import { isPresentDate } from "@/lib/date-utils";
+import { StringListField } from "@/components/ui/string-list-field";
+import { LanguageListField } from "@/components/ui/language-list-field";
+import { getResumeBuildMissingFields } from "@/lib/resume-validation";
 import { useResumeStore } from "@/store/resume-store";
+
+function ContinueRequirementsHint({
+  missing,
+}: {
+  missing: string[];
+}) {
+  if (missing.length === 0) return null;
+  return (
+    <p className="rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+      To continue, fill in:{" "}
+      <span className="font-medium">{missing.join(", ")}</span>
+    </p>
+  );
+}
 
 function EntryCard({
   title,
@@ -43,23 +60,40 @@ function EntryCard({
   );
 }
 
-export function ResumeEditor() {
+export function ResumeEditor({
+  title = "Edit Your Resume",
+  description = "Review and refine your resume before tailoring",
+  onBack,
+  showContinueRequirements = false,
+}: {
+  title?: string;
+  description?: string;
+  onBack?: () => void;
+  showContinueRequirements?: boolean;
+} = {}) {
   const { resume, updateResume, prevStep, nextStep } = useResumeStore();
 
-  const canContinue =
-    resume.header.name.trim() && resume.header.email.trim();
+  const missingRequired = showContinueRequirements
+    ? getResumeBuildMissingFields(resume)
+    : [];
+
+  const canContinue = showContinueRequirements
+    ? missingRequired.length === 0
+    : Boolean(resume.header.name.trim() && resume.header.email.trim());
+
+  const req = showContinueRequirements ? " *" : "";
+
+  const handleBack = onBack ?? prevStep;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Edit Your Resume</h2>
-          <p className="text-sm text-muted-foreground">
-            Review and refine your resume before tailoring
-          </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={prevStep}>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={handleBack}>
             <ChevronLeft className="size-4" />
             Back
           </Button>
@@ -75,9 +109,13 @@ export function ResumeEditor() {
         </div>
       </div>
 
+      {showContinueRequirements && !canContinue && (
+        <ContinueRequirementsHint missing={missingRequired} />
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="max-h-[70vh] space-y-6 overflow-y-auto pr-2">
-          <FormSection title="Header">
+        <div className="max-h-[70vh] space-y-6 overflow-y-auto px-1 py-1 pr-2">
+          <FormSection title={`Header${req}`}>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-xs font-medium text-muted-foreground">
@@ -220,10 +258,10 @@ export function ResumeEditor() {
 
           <Separator />
 
-          <FormSection title="Professional Summary">
+          <FormSection title={`Professional Summary${req}`}>
             <div className="space-y-1.5">
               <Label htmlFor="summary" className="text-xs font-medium text-muted-foreground">
-                Summary
+                Summary{req}
               </Label>
               <Textarea
                 id="summary"
@@ -239,7 +277,7 @@ export function ResumeEditor() {
           <Separator />
 
           <FormSection
-            title="Work Experience"
+            title={`Work Experience${req}`}
             action={
               <Button
                 variant="outline"
@@ -469,6 +507,7 @@ export function ResumeEditor() {
                       {
                         id: createId(),
                         name: "",
+                        bullets: [""],
                         description: "",
                         technologies: [],
                         url: "",
@@ -483,10 +522,15 @@ export function ResumeEditor() {
             }
           >
             <div className="space-y-3">
-              {resume.projects.map((proj, projIdx) => (
+              {resume.projects.map((proj, projIdx) => {
+                const projectBullets =
+                  proj.bullets?.length > 0
+                    ? proj.bullets
+                    : getProjectBullets(proj);
+                return (
                 <EntryCard
                   key={proj.id}
-                  title={`Project ${projIdx + 1}`}
+                  title={proj.name.trim() || `Project ${projIdx + 1}`}
                   onRemove={() =>
                     updateResume((r) => ({
                       ...r,
@@ -496,7 +540,9 @@ export function ResumeEditor() {
                 >
                   <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">Project Name</Label>
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        Project Name
+                      </Label>
                       <Input
                         value={proj.name}
                         onChange={(e) =>
@@ -508,41 +554,103 @@ export function ResumeEditor() {
                         }
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">What the project does</Label>
-                      <Textarea
-                        rows={3}
-                        value={proj.description}
-                        onChange={(e) =>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        What the project does
+                      </Label>
+                      {projectBullets.map((bullet, bulletIdx) => (
+                        <div key={bulletIdx} className="flex gap-2">
+                          <Textarea
+                            rows={2}
+                            value={bullet}
+                            className="flex-1"
+                            placeholder="Describe an outcome or responsibility"
+                            onChange={(e) =>
+                              updateResume((r) => {
+                                const projects = [...r.projects];
+                                const current = projects[projIdx];
+                                const bullets = [
+                                  ...(current.bullets?.length
+                                    ? current.bullets
+                                    : getProjectBullets(current)),
+                                ];
+                                bullets[bulletIdx] = e.target.value;
+                                projects[projIdx] = {
+                                  ...current,
+                                  bullets,
+                                  description: projectDescriptionFromBullets(bullets),
+                                };
+                                return { ...r, projects };
+                              })
+                            }
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={() =>
+                              updateResume((r) => {
+                                const projects = [...r.projects];
+                                const current = projects[projIdx];
+                                const bullets = (
+                                  current.bullets?.length
+                                    ? current.bullets
+                                    : getProjectBullets(current)
+                                ).filter((_, i) => i !== bulletIdx);
+                                projects[projIdx] = {
+                                  ...current,
+                                  bullets,
+                                  description: projectDescriptionFromBullets(bullets),
+                                };
+                                return { ...r, projects };
+                              })
+                            }
+                          >
+                            <Trash2 className="size-3 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={() =>
                           updateResume((r) => {
                             const projects = [...r.projects];
-                            projects[projIdx] = { ...proj, description: e.target.value };
-                            return { ...r, projects };
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">Tech Stack (comma-separated)</Label>
-                      <Input
-                        value={(proj.technologies ?? []).join(", ")}
-                        onChange={(e) =>
-                          updateResume((r) => {
-                            const projects = [...r.projects];
+                            const current = projects[projIdx];
+                            const bullets = [
+                              ...(current.bullets?.length
+                                ? current.bullets
+                                : getProjectBullets(current)),
+                              "",
+                            ];
                             projects[projIdx] = {
-                              ...proj,
-                              technologies: e.target.value
-                                .split(",")
-                                .map((s) => s.trim())
-                                .filter(Boolean),
+                              ...current,
+                              bullets,
+                              description: projectDescriptionFromBullets(bullets),
                             };
                             return { ...r, projects };
                           })
                         }
-                      />
+                      >
+                        <Plus className="size-3" />
+                        Add bullet
+                      </Button>
                     </div>
+                    <StringListField
+                      label="Tech stack"
+                      placeholder="e.g. React"
+                      values={proj.technologies ?? []}
+                      onChange={(technologies) =>
+                        updateResume((r) => {
+                          const projects = [...r.projects];
+                          projects[projIdx] = { ...proj, technologies };
+                          return { ...r, projects };
+                        })
+                      }
+                    />
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-muted-foreground">URL (optional)</Label>
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        URL (optional)
+                      </Label>
                       <Input
                         value={proj.url ?? ""}
                         onChange={(e) =>
@@ -556,14 +664,15 @@ export function ResumeEditor() {
                     </div>
                   </div>
                 </EntryCard>
-              ))}
+                );
+              })}
             </div>
           </FormSection>
 
           <Separator />
 
           <FormSection
-            title="Education"
+            title={`Education${req}`}
             action={
               <Button
                 variant="outline"
@@ -689,47 +798,22 @@ export function ResumeEditor() {
           <Separator />
 
           <FormSection title="Skills">
-            <div className="space-y-1.5">
-              <Label htmlFor="skills" className="text-xs font-medium text-muted-foreground">
-                Skills (comma-separated)
-              </Label>
-              <Textarea
-                id="skills"
-                rows={2}
-                value={resume.skills.join(", ")}
-                onChange={(e) =>
-                  updateResume((r) => ({
-                    ...r,
-                    skills: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  }))
-                }
-              />
-            </div>
+            <StringListField
+              id="skills"
+              label="Skills"
+              placeholder="e.g. TypeScript"
+              values={resume.skills}
+              onChange={(skills) => updateResume((r) => ({ ...r, skills }))}
+            />
           </FormSection>
 
           <FormSection title="Languages">
-            <div className="space-y-1.5">
-              <Label htmlFor="languages" className="text-xs font-medium text-muted-foreground">
-                Languages (comma-separated)
-              </Label>
-              <Textarea
-                id="languages"
-                rows={2}
-                value={resume.languages.join(", ")}
-                onChange={(e) =>
-                  updateResume((r) => ({
-                    ...r,
-                    languages: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  }))
-                }
-              />
-            </div>
+            <LanguageListField
+              id="languages"
+              label="Languages"
+              values={resume.languages}
+              onChange={(languages) => updateResume((r) => ({ ...r, languages }))}
+            />
           </FormSection>
 
           <Separator />

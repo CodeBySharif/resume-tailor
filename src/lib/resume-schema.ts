@@ -1,3 +1,8 @@
+import {
+  partitionProjectBulletsAndTechnologies,
+  sanitizeParsedResumeText,
+} from "./resume-parse-sanitize";
+import { dedupeExperienceLocation } from "./experience-format";
 import { parseToMonthYear } from "./date-utils";
 import {
   normalizeHeaderNameTitle,
@@ -29,7 +34,9 @@ export interface Experience {
 export interface Project {
   id: string;
   name: string;
+  /** @deprecated Synced from bullets — use bullets for editing */
   description: string;
+  bullets: string[];
   technologies?: string[];
   url?: string;
 }
@@ -133,6 +140,50 @@ export function createEmptyResume(): Resume {
   };
 }
 
+/** ATS-friendly scaffold for Create Resume flow — structured sections, one empty experience row. */
+export function createAtsScaffoldResume(): Resume {
+  return {
+    header: {
+      name: "",
+      title: "",
+      phone: "",
+      email: "",
+      city: "",
+      linkedin: "",
+      portfolio: "",
+      showLinkedin: false,
+      showPortfolio: false,
+    },
+    summary: "",
+    experience: [
+      {
+        id: createId(),
+        company: "",
+        role: "",
+        location: "",
+        startDate: "",
+        endDate: "",
+        bullets: [""],
+      },
+    ],
+    projects: [],
+    education: [
+      {
+        id: createId(),
+        institution: "",
+        degree: "",
+        field: "",
+        startDate: "",
+        endDate: "",
+        gpa: "",
+      },
+    ],
+    skills: [],
+    languages: [],
+    customSections: [],
+  };
+}
+
 export function createTemplateResume(): Resume {
   return {
     header: {
@@ -177,6 +228,9 @@ export function createTemplateResume(): Resume {
       {
         id: createId(),
         name: "Open Source CLI Tool",
+        bullets: [
+          "Developed a developer productivity CLI with 1K+ GitHub stars",
+        ],
         description:
           "Developed a developer productivity CLI with 1K+ GitHub stars",
         technologies: ["TypeScript", "Node.js"],
@@ -224,7 +278,7 @@ export const RESUME_JSON_SCHEMA = `{
   "header": { "name": "string", "title": "string", "phone": "string", "email": "string", "city": "string", "linkedin": "string?", "portfolio": "string?" },
   "summary": "string",
   "experience": [{ "id": "string", "company": "string", "role": "string", "location": "string?", "startDate": "string", "endDate": "string", "bullets": ["string"] }],
-  "projects": [{ "id": "string", "name": "string", "description": "string", "technologies": ["string"]?, "url": "string?" }],
+  "projects": [{ "id": "string", "name": "string", "bullets": ["string"], "technologies": ["string"]?, "url": "string?" }],
   "education": [{ "id": "string", "institution": "string", "degree": "string", "field": "string?", "startDate": "string", "endDate": "string", "gpa": "string?" }],
   "skills": ["string"],
   "languages": ["string"],
@@ -250,12 +304,77 @@ export function coerceResumeString(value: unknown): string {
   return normalizePrintableText(String(value).trim());
 }
 
-export function coerceResumeStringList(values: unknown): string[] {
-  if (!Array.isArray(values)) return [];
-  return values.map(coerceResumeString).filter(Boolean);
+export function splitResumeListTokens(value: string): string[] {
+  return value
+    .split(/[,;|•·]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
-export function normalizeResume(data: Partial<Resume>): Resume {
+export function coerceResumeStringList(values: unknown): string[] {
+  if (typeof values === "string") {
+    return splitResumeListTokens(values).map(coerceResumeString).filter(Boolean);
+  }
+  if (!Array.isArray(values)) return [];
+  return values
+    .flatMap((item) => {
+      const text = coerceResumeString(item);
+      if (!text) return [];
+      if (/[,;|•·]/.test(text)) return splitResumeListTokens(text);
+      return [text];
+    })
+    .filter(Boolean);
+}
+
+export function projectDescriptionFromBullets(bullets: string[]): string {
+  return bullets
+    .map((bullet) => normalizePrintableText(bullet))
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function getProjectBullets(
+  project: Pick<Project, "bullets" | "description">
+): string[] {
+  const fromBullets = (project.bullets ?? [])
+    .map((bullet) => normalizePrintableText(bullet))
+    .filter(Boolean);
+  if (fromBullets.length > 0) return fromBullets;
+
+  const description = normalizePrintableText(project.description ?? "");
+  if (!description) return [];
+
+  const lines = description
+    .split(/\n+/)
+    .map((line) => line.replace(/^[-•*]\s*/, "").trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines : [description];
+}
+
+function normalizeProjectBullets(
+  project: Partial<Project>,
+  sanitizeArtifacts: boolean
+): string[] {
+  const clean = (text: string) =>
+    sanitizeArtifacts ? sanitizeParsedResumeText(text) : normalizePrintableText(text);
+
+  const fromBullets = (project.bullets ?? [])
+    .map((bullet) => clean(String(bullet)))
+    .filter(Boolean);
+  if (fromBullets.length > 0) return fromBullets;
+  return getProjectBullets({
+    bullets: [],
+    description: clean(project.description ?? ""),
+  });
+}
+
+export function normalizeResume(
+  data: Partial<Resume>,
+  options?: { sanitizeArtifacts?: boolean }
+): Resume {
+  const sanitizeArtifacts = options?.sanitizeArtifacts ?? false;
+  const cleanText = (text: string) =>
+    sanitizeArtifacts ? sanitizeParsedResumeText(text) : normalizePrintableText(text);
   const empty = createEmptyResume();
   const header = { ...empty.header, ...data.header };
   const { name, title } = normalizeHeaderNameTitle(
@@ -280,22 +399,39 @@ export function normalizeResume(data: Partial<Resume>): Resume {
       showPortfolio: header.showPortfolio ?? false,
     },
     summary: normalizePrintableText(data.summary ?? ""),
-    experience: (data.experience ?? []).map((e) => ({
-      id: e.id || createId(),
-      company: normalizePrintableText(e.company ?? ""),
-      role: normalizePrintableText(e.role ?? ""),
-      location: normalizePrintableText(e.location ?? ""),
-      startDate: parseToMonthYear(e.startDate ?? ""),
-      endDate: parseToMonthYear(e.endDate ?? ""),
-      bullets: (e.bullets ?? []).map((b) => normalizePrintableText(b)),
-    })),
-    projects: (data.projects ?? []).map((p) => ({
-      id: p.id || createId(),
-      name: normalizePrintableText(p.name ?? ""),
-      description: normalizePrintableText(p.description ?? ""),
-      technologies: coerceResumeStringList(p.technologies),
-      url: p.url ? normalizePrintableText(p.url) : "",
-    })),
+    experience: (data.experience ?? []).map((e) => {
+      const deduped = dedupeExperienceLocation(
+        e.company ?? "",
+        e.location ?? ""
+      );
+      return {
+        id: e.id || createId(),
+        company: deduped.company,
+        role: normalizePrintableText(e.role ?? ""),
+        location: deduped.location,
+        startDate: parseToMonthYear(e.startDate ?? ""),
+        endDate: parseToMonthYear(e.endDate ?? ""),
+        bullets: (e.bullets ?? []).map((b) => normalizePrintableText(b)),
+      };
+    }),
+    projects: (data.projects ?? []).map((p) => {
+      const rawBullets = normalizeProjectBullets(p, sanitizeArtifacts);
+      const rawTech = coerceResumeStringList(p.technologies).map((item) =>
+        sanitizeArtifacts ? sanitizeParsedResumeText(item) : item
+      );
+      const partitioned = sanitizeArtifacts
+        ? partitionProjectBulletsAndTechnologies(rawBullets, rawTech)
+        : { bullets: rawBullets, technologies: rawTech };
+      const { bullets, technologies } = partitioned;
+      return {
+        id: p.id || createId(),
+        name: cleanText(p.name ?? ""),
+        bullets,
+        description: projectDescriptionFromBullets(bullets),
+        technologies,
+        url: p.url ? cleanText(p.url) : "",
+      };
+    }),
     education: (data.education ?? []).map((e) => ({
       id: e.id || createId(),
       institution: normalizePrintableText(e.institution ?? ""),

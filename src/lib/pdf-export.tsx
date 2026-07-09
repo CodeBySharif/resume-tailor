@@ -10,7 +10,9 @@ import {
 } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
 import type { Resume, ResumeHeader } from "./resume-schema";
+import { getProjectBullets } from "./resume-schema";
 import { formatDateRange } from "./date-utils";
+import { formatExperienceCompanyLine } from "./experience-format";
 import { formatDisplayName, formatDisplayTitle } from "./format-name";
 import {
   getCoverLetterGreeting,
@@ -288,7 +290,7 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
                 </View>
                 <Text style={[styles.entrySubtitle, styles.contentSpaced]}>
                   {sanitizePdfText(
-                    `${exp.company}${exp.location ? `, ${exp.location}` : ""}`
+                    formatExperienceCompanyLine(exp.company, exp.location)
                   )}
                 </Text>
                 <View style={styles.contentSpaced}>
@@ -306,22 +308,34 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
 
         {resume.projects.length > 0 ? (
           <PdfResumeSection title="Projects">
-            {resume.projects.map((proj, index) => (
+            {resume.projects.map((proj, index) => {
+              const bullets = getProjectBullets(proj).filter(Boolean);
+              return (
               <View
                 key={proj.id}
                 style={index > 0 ? styles.resumeEntry : undefined}
               >
                 <Text style={styles.entryTitle}>{sanitizePdfText(proj.name)}</Text>
-                <Text style={[styles.projectDesc, styles.contentSpaced]}>
-                  {sanitizePdfText(proj.description)}
-                </Text>
+                {bullets.length > 0 ? (
+                  <View style={styles.contentSpaced}>
+                    {bullets.map((bullet, i) => (
+                      <View key={i} style={styles.bullet}>
+                        <Text style={styles.bulletDot}>•</Text>
+                        <Text style={styles.bulletText}>
+                          {sanitizePdfText(bullet)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
                 {proj.technologies && proj.technologies.length > 0 ? (
                   <Text style={[styles.projectTech, styles.contentSpaced]}>
-                    {sanitizePdfText(proj.technologies.join(", "))}
+                    {sanitizePdfText(proj.technologies.join(" · "))}
                   </Text>
                 ) : null}
               </View>
-            ))}
+              );
+            })}
           </PdfResumeSection>
         ) : null}
 

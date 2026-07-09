@@ -27,4 +27,17 @@ export function getTailorDurationMs(provider: LLMProvider): number {
   }
 }
 
+export function getAtsCheckDurationMs(provider: LLMProvider): number {
+  switch (provider) {
+    case "gemini":
+      return 25_000;
+    case "groq":
+      return 40_000;
+    case "openrouter":
+      return 50_000;
+    default:
+      return 50_000;
+  }
+}
+
 export const PDF_READ_DURATION_MS = 4_000;

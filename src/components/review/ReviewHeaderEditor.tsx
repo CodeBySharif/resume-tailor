@@ -33,9 +33,27 @@ function HeaderField({
   );
 }
 
-export function ReviewHeaderEditor() {
-  const { tailoredResume, originalResume, setTailoredResume } = useResumeStore();
-  const base = tailoredResume ?? originalResume;
+export function ReviewHeaderEditor({
+  target = "tailored",
+}: {
+  target?: "tailored" | "fixed" | "created";
+}) {
+  const {
+    tailoredResume,
+    originalResume,
+    fixedResume,
+    createdResume,
+    setTailoredResume,
+    setFixedResume,
+    setCreatedResume,
+  } = useResumeStore();
+
+  const base =
+    target === "created"
+      ? createdResume
+      : target === "fixed"
+        ? fixedResume
+        : (tailoredResume ?? originalResume);
 
   if (!base) return null;
 
@@ -44,10 +62,17 @@ export function ReviewHeaderEditor() {
       ...base,
       header: { ...base.header, ...patch },
     };
-    setTailoredResume(next);
+    if (target === "created") setCreatedResume(next);
+    else if (target === "fixed") setFixedResume(next);
+    else setTailoredResume(next);
   };
 
-  const header = (tailoredResume ?? base).header;
+  const header =
+    (target === "created"
+      ? createdResume
+      : target === "fixed"
+        ? fixedResume
+        : (tailoredResume ?? base))?.header ?? base.header;
 
   return (
     <div className="rounded-lg border bg-muted/20 p-4">

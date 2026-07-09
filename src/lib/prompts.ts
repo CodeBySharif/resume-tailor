@@ -1,7 +1,28 @@
+import type { AtsCheckResult } from "./ats-types";
+import type { ResumeSuggestResult } from "./resume-suggest-types";
+import { RESUME_SUGGEST_JSON_SCHEMA } from "./resume-suggest-types";
 import type { JobDetails, Resume } from "./resume-schema";
 import type { GenerationStyle } from "./writing-tone";
 import { getToneOption } from "./writing-tone";
 import { RESUME_JSON_SCHEMA } from "./resume-schema";
+import { ATS_CHECK_JSON_SCHEMA } from "./ats-types";
+import {
+  buildAtsPrecheckHints,
+  formatPrecheckForPrompt,
+} from "./ats-precheck";
+
+const SHARED_RESUME_WRITING_RULES = `
+Metrics rules:
+- Only use numbers explicitly stated in the source resume unless metrics-driven mode is active
+- If drafting metrics, use conservative, believable estimates — never inflate or exaggerate to impress recruiters
+- Avoid round hype numbers (e.g. 99.9% uptime, 10x growth) unless clearly supported by source text
+- Prefer qualitative impact when exact figures are unknown
+
+Action verb rules:
+- Vary bullet openings across the entire resume
+- No action verb (or close synonym) may appear more than twice across all experience bullets combined
+- Prefer distinct strong verbs (e.g. Built, Led, Improved, Delivered, Automated, Designed)
+`;
 
 export function buildParseResumePrompt(text: string): string {
   return `You are a resume parser. Extract structured data from the following resume text and return valid JSON matching this schema:
@@ -14,8 +35,15 @@ Rules:
 - If a field is missing, use empty string or empty array
 - header.name is the person's full name only; header.title is their job title only — never combine them into one field
 - Dates should be kept as written (e.g. "Jan 2020", "2021-Present")
-- Split bullet points into the bullets array
-- languages must be an array of plain strings (e.g. "English (Native)"), not objects
+- Split bullet points into the bullets array for experience and projects
+- projects must use a bullets array (one achievement per bullet), like work experience — not a single paragraph description
+- projects.technologies MUST be a JSON array of strings (e.g. [".NET Core", "MVC"]) — one technology per entry, never a plain string, never inside bullets, never commentary
+- skills must be an array with one skill per entry — never a single comma-separated string
+- languages must be an array of plain strings with proficiency in parentheses (e.g. "English (Native)", "Spanish (Conversational)"), one language per entry — not objects or comma-separated strings
+- Return ONLY valid JSON. No explanations, corrections, markdown, or commentary inside the JSON
+
+Example project entry:
+{ "id": "uuid", "name": "Paydee E - Financing System", "bullets": ["Developed online loan application workflows with automated document generation and reporting, reducing manual effort and improving compliance."], "technologies": [".NET Core", "MVC"] }
 
 Resume text:
 ---
@@ -63,9 +91,9 @@ ${job.skillGaps.trim()}
     style.resumeTone === "metrics" || style.coverLetterTone === "metrics"
       ? `
 Metrics-driven mode guidance:
-- Prioritize quantified impact (%, counts, volume, speed, time saved, uptime, etc.).
-- If exact values are not provided in source text, include realistic draft numbers so the candidate can fine-tune them during review.
-- Keep numbers plausible for the role and responsibilities.
+- Prioritize quantified impact where the source resume supports it (%, counts, time saved, scale)
+- If exact values are missing, add conservative draft placeholders the candidate can verify — never exaggerate
+- Keep numbers modest and plausible for the role; misleading metrics are worse than no metrics
 `
       : "";
 
@@ -97,6 +125,14 @@ Instructions:
 9. If "what excites the candidate" notes are provided, include genuine enthusiasm in the cover letter
 10. If skill gap notes are provided, address gaps honestly with transferable strengths — never fabricate qualifications
 
+ATS-friendly output requirements (apply to the tailored resume):
+- Use standard section headings and a parseable single-column layout (no tables, columns, or graphics)
+- Mirror important keywords from the job description where the candidate genuinely has that experience
+- Lead experience bullets with strong action verbs; include metrics where truthful
+- Keep contact info complete and skills list focused (roughly 10–25 relevant skills)
+- Ensure consistent date formatting and correct grammar/tense throughout
+${SHARED_RESUME_WRITING_RULES}
+
 Return JSON with this exact structure:
 {
   "resume": <tailored resume matching schema>,
@@ -107,4 +143,230 @@ Return JSON with this exact structure:
 }
 
 Include at least 3 meaningful changes in the changes array. Return ONLY valid JSON.`;
+}
+
+export function buildAtsCheckPrompt(resume: Resume, job: JobDetails): string {
+  const excludeList = job.skillsToExclude
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const excludeSection =
+    excludeList.length > 0
+      ? `
+Skills/topics to NEVER suggest adding (candidate excluded these):
+${excludeList.map((s) => `- ${s}`).join("\n")}
+`
+      : "";
+
+  const precheck = formatPrecheckForPrompt(buildAtsPrecheckHints(resume));
+
+  return `You are an expert ATS resume analyst. Score the resume against the target job using evidence from the resume text only.
+
+Target Job:
+- Company: ${job.company}
+- Role: ${job.role}
+- Job Description:
+${job.jobDescription}
+${excludeSection}
+Resume (JSON):
+${JSON.stringify(resume, null, 2)}
+
+${precheck}
+
+Score these 10 categories (weights must sum to 100):
+1. keyword_match (20%) — Required/preferred JD terms in summary, skills, experience; include acronym pairs where relevant
+2. title_alignment (10%) — Header title and recent role align with target role family
+3. quantified_impact (15%) — Share of bullets with metrics (%, $, time, scale, users); flag missing quantification, do NOT invent metrics
+4. section_structure (10%) — Standard sections present and populated; skills count ideally 10–25
+5. formatting (10%) — Parse-friendly structure: complete contact, consistent dates, no empty blocks
+6. experience_depth (10%) — Recent roles relevant to JD; dates and tenure present; seniority fits posting
+7. education_certs (5%) — Degree/field/certs from JD reflected when applicable
+8. action_verbs (10%) — Strong bullet openings; avoid vague filler ("responsible for", "helped with")
+9. repetition (5%) — Overused verbs/phrases across bullets; flag any action verb used more than twice; duplicate skills
+10. spelling_grammar (5%) — Typos, grammar, tense consistency (past for past roles, present for current)
+
+Rules:
+- Base every finding on actual resume content — cite specific bullets or fields
+- overallScore must equal the weighted average of category scores (weight × score / 100)
+- status: pass ≥75, warning 55–74, fail <55
+- grade: Excellent ≥90, Good ≥75, Fair ≥60, Needs Work <60
+- topPriorities: exactly 3 highest-impact fixes, ordered
+- Never suggest skills from the exclusion list
+
+Return JSON matching this schema:
+${ATS_CHECK_JSON_SCHEMA}
+
+Return ONLY valid JSON, no markdown fences.`;
+}
+
+export function buildGeneralAtsCheckPrompt(resume: Resume): string {
+  const precheck = formatPrecheckForPrompt(buildAtsPrecheckHints(resume));
+
+  return `You are an expert ATS resume analyst. Score this resume for general ATS-friendliness and recruiter readability — NOT against a specific job description.
+
+Resume (JSON):
+${JSON.stringify(resume, null, 2)}
+
+${precheck}
+
+Score these 10 categories (weights must sum to 100):
+1. keyword_match (20%) — Skills section clarity, relevant industry terms, and acronym pairs where appropriate (not JD matching)
+2. title_alignment (10%) — Professional title present in header and aligned with experience level
+3. quantified_impact (15%) — Share of bullets with metrics (%, $, time, scale, users); flag missing quantification, do NOT invent metrics
+4. section_structure (10%) — Standard sections present and populated; skills count ideally 10–25
+5. formatting (10%) — Parse-friendly structure: complete contact, consistent dates, no tables/columns/graphics
+6. experience_depth (10%) — Recent roles with clear dates, tenure, and substantive bullets
+7. education_certs (5%) — Education block complete when degrees/certs are listed
+8. action_verbs (10%) — Strong bullet openings; avoid vague filler ("responsible for", "helped with")
+9. repetition (5%) — Overused verbs/phrases across bullets; flag any action verb used more than twice; duplicate skills
+10. spelling_grammar (5%) — Typos, grammar, tense consistency (past for past roles, present for current)
+
+Rules:
+- Base every finding on actual resume content — cite specific bullets or fields
+- overallScore must equal the weighted average of category scores (weight × score / 100)
+- status: pass ≥75, warning 55–74, fail <55
+- grade: Excellent ≥90, Good ≥75, Fair ≥60, Needs Work <60
+- topPriorities: exactly 3 highest-impact fixes, ordered
+- missingKeywords / matchedKeywords: use for industry-relevant terms found or absent in the resume (not JD terms)
+
+Return JSON matching this schema:
+${ATS_CHECK_JSON_SCHEMA}
+
+Return ONLY valid JSON, no markdown fences.`;
+}
+
+export function buildAtsFixPrompt(
+  resume: Resume,
+  atsResult: AtsCheckResult,
+  style: GenerationStyle
+): string {
+  const failingCategories = atsResult.categories.filter(
+    (c) => c.status === "fail" || c.status === "warning"
+  );
+  const resumeTone = getToneOption(style.resumeTone);
+
+  return `You are an expert resume writer specializing in ATS-friendly resumes. Improve the resume to address ATS issues identified in the analysis while keeping all claims truthful.
+
+Writing voice — Resume tone (${resumeTone.label}): ${resumeTone.resumePrompt}
+
+Current Resume (JSON):
+${JSON.stringify(resume, null, 2)}
+
+ATS Analysis Summary:
+- Overall score: ${atsResult.overallScore}/100 (${atsResult.grade})
+- Top priorities: ${atsResult.topPriorities.map((p) => `\n  - ${p}`).join("")}
+
+Categories needing improvement:
+${failingCategories
+  .map(
+    (c) => `
+${c.label} (score ${c.score}, status ${c.status}):
+Findings: ${c.findings.join("; ") || "—"}
+Suggestions: ${c.suggestions.join("; ") || "—"}`
+  )
+  .join("\n")}
+
+Instructions:
+1. Address every fail/warning category using the suggestions and top priorities above
+2. Keep the same structure and all id fields unchanged
+3. Do NOT fabricate experience, companies, credentials, technologies, or metrics
+4. Improve formatting, action verbs, section clarity, and quantification only where supported by existing content
+5. Use standard ATS-parseable layout: single column, standard headings, no tables or graphics
+6. Strengthen skills presentation and professional summary without inventing skills
+${SHARED_RESUME_WRITING_RULES}
+
+Return JSON with this exact structure:
+{
+  "resume": <improved resume matching schema>
+}
+
+Return ONLY valid JSON, no markdown fences.`;
+}
+
+export function buildResumeSuggestPrompt(resume: Resume): string {
+  const precheck = formatPrecheckForPrompt(buildAtsPrecheckHints(resume));
+
+  return `You are an expert resume coach helping someone build an ATS-friendly resume from scratch. Analyze the draft resume and suggest what to add or improve. Do NOT invent experience — only suggest based on gaps in what they have written.
+
+Resume (JSON):
+${JSON.stringify(resume, null, 2)}
+
+${precheck}
+
+Evaluate these areas:
+- summary — professional summary present and compelling
+- experience — bullets with action verbs, dates, quantified impact where supported
+- skills — clear skills list (ideally 10–25 relevant terms)
+- education — complete entries when listed
+- formatting — ATS-parseable structure, complete contact info
+- action_verbs — variety; flag verbs used more than twice
+- metrics — flag exaggerated or missing quantification
+
+Rules:
+- priorities: exactly 3 highest-impact improvements, ordered
+- sections: group findings and suggestions by resume area
+- Be specific — cite what's missing or weak in their draft
+- Never suggest fabricating experience, companies, or credentials
+
+Return JSON matching this schema:
+${RESUME_SUGGEST_JSON_SCHEMA}
+
+Return ONLY valid JSON, no markdown fences.`;
+}
+
+export type ResumeEnhanceMode = "enhance" | "polish";
+
+export function buildResumeEnhancePrompt(
+  resume: Resume,
+  suggestions: ResumeSuggestResult,
+  style: GenerationStyle,
+  mode: ResumeEnhanceMode
+): string {
+  const resumeTone = getToneOption(style.resumeTone);
+  const modeInstructions =
+    mode === "polish"
+      ? `POLISH MODE — Light touch only:
+- Fix grammar, spelling, tense consistency, and formatting
+- Improve bullet structure and action verb variety
+- Do NOT add new experience, companies, skills, projects, or metrics
+- Do NOT invent content — only refine what is already present
+- Keep all factual claims identical to the source`
+      : `ENHANCE MODE — Apply suggestions:
+- Address the priorities and section suggestions below using only truthful content
+- Expand weak sections the user started but left incomplete
+- Do NOT fabricate companies, roles, credentials, or technologies not implied by their draft`;
+
+  return `You are an expert resume writer creating an ATS-friendly resume.
+
+Writing voice — Resume tone (${resumeTone.label}): ${resumeTone.resumePrompt}
+
+${modeInstructions}
+
+Current Resume (JSON):
+${JSON.stringify(resume, null, 2)}
+
+AI Suggestions:
+Priorities: ${suggestions.priorities.map((p) => `\n- ${p}`).join("")}
+${suggestions.sections
+  .map(
+    (s) => `
+${s.label}:
+Findings: ${s.findings.join("; ") || "—"}
+Suggestions: ${s.suggestions.join("; ") || "—"}`
+  )
+  .join("\n")}
+
+Instructions:
+1. Keep the same structure and all id fields unchanged
+2. Use standard ATS-parseable single-column layout
+3. Do NOT fabricate experience the user did not provide
+${SHARED_RESUME_WRITING_RULES}
+
+Return JSON with this exact structure:
+{
+  "resume": <improved resume matching schema>
+}
+
+Return ONLY valid JSON, no markdown fences.`;
 }

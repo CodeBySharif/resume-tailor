@@ -1,10 +1,18 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { StringListField } from "@/components/ui/string-list-field";
+import { LanguageListField } from "@/components/ui/language-list-field";
 import { Input } from "@/components/ui/input";
-import type { Resume } from "@/lib/resume-schema";
+import { Label } from "@/components/ui/label";
+import {
+  getProjectBullets,
+  projectDescriptionFromBullets,
+  type Resume,
+} from "@/lib/resume-schema";
 import { moveArrayItem } from "@/lib/array-utils";
+import { dedupeExperienceLocation } from "@/lib/experience-format";
 import { ReorderButtons } from "@/components/resume/ReorderButtons";
 import { MonthYearInput } from "@/components/resume/MonthYearInput";
 import { isPresentDate } from "@/lib/date-utils";
@@ -32,10 +40,25 @@ function SectionBlock({
 
 interface ResumeInlineEditorProps {
   resume: Resume;
+  target?: "tailored" | "fixed" | "created";
 }
 
-export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
-  const { updateTailoredResume } = useResumeStore();
+export function ResumeInlineEditor({
+  resume,
+  target = "tailored",
+}: ResumeInlineEditorProps) {
+  const { updateTailoredResume, updateFixedResume, updateCreatedResume } =
+    useResumeStore();
+
+  const applyUpdate = (updater: (r: Resume) => Resume) => {
+    if (target === "created") {
+      updateCreatedResume(updater);
+    } else if (target === "fixed") {
+      updateFixedResume(updater);
+    } else {
+      updateTailoredResume((r) => updater(r ?? resume));
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -47,7 +70,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
           rows={4}
           value={resume.summary}
           onChange={(e) =>
-            updateTailoredResume((r) => ({ ...r, summary: e.target.value }))
+            applyUpdate((r) => ({ ...r, summary: e.target.value }))
           }
         />
       </div>
@@ -63,13 +86,13 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               index={expIdx}
               total={resume.experience.length}
               onMoveUp={() =>
-                updateTailoredResume((r) => ({
+                applyUpdate((r) => ({
                   ...r,
                   experience: moveArrayItem(r.experience, expIdx, expIdx - 1),
                 }))
               }
               onMoveDown={() =>
-                updateTailoredResume((r) => ({
+                applyUpdate((r) => ({
                   ...r,
                   experience: moveArrayItem(r.experience, expIdx, expIdx + 1),
                 }))
@@ -83,7 +106,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               <Input
                 value={exp.role}
                 onChange={(e) =>
-                  updateTailoredResume((r) => {
+                  applyUpdate((r) => {
                     const experience = [...r.experience];
                     experience[expIdx] = { ...exp, role: e.target.value };
                     return { ...r, experience };
@@ -96,9 +119,39 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               <Input
                 value={exp.company}
                 onChange={(e) =>
-                  updateTailoredResume((r) => {
+                  applyUpdate((r) => {
                     const experience = [...r.experience];
-                    experience[expIdx] = { ...exp, company: e.target.value };
+                    const deduped = dedupeExperienceLocation(
+                      e.target.value,
+                      exp.location ?? ""
+                    );
+                    experience[expIdx] = {
+                      ...exp,
+                      company: deduped.company,
+                      location: deduped.location,
+                    };
+                    return { ...r, experience };
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs text-muted-foreground">Location</Label>
+              <Input
+                placeholder="e.g. Remote, Kuala Lumpur"
+                value={exp.location ?? ""}
+                onChange={(e) =>
+                  applyUpdate((r) => {
+                    const experience = [...r.experience];
+                    const deduped = dedupeExperienceLocation(
+                      exp.company,
+                      e.target.value
+                    );
+                    experience[expIdx] = {
+                      ...exp,
+                      company: deduped.company,
+                      location: deduped.location,
+                    };
                     return { ...r, experience };
                   })
                 }
@@ -109,7 +162,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               label="Start Date"
               value={exp.startDate}
               onChange={(v) =>
-                updateTailoredResume((r) => {
+                applyUpdate((r) => {
                   const experience = [...r.experience];
                   experience[expIdx] = { ...exp, startDate: v };
                   return { ...r, experience };
@@ -122,7 +175,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               value={isCurrent ? "" : exp.endDate}
               disabled={isCurrent}
               onChange={(v) =>
-                updateTailoredResume((r) => {
+                applyUpdate((r) => {
                   const experience = [...r.experience];
                   experience[expIdx] = { ...exp, endDate: v };
                   return { ...r, experience };
@@ -135,7 +188,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               type="checkbox"
               checked={isCurrent}
               onChange={(e) =>
-                updateTailoredResume((r) => {
+                applyUpdate((r) => {
                   const experience = [...r.experience];
                   experience[expIdx] = {
                     ...exp,
@@ -156,7 +209,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
                 rows={2}
                 value={bullet}
                 onChange={(e) =>
-                  updateTailoredResume((r) => {
+                  applyUpdate((r) => {
                     const experience = [...r.experience];
                     const bullets = [...exp.bullets];
                     bullets[bulletIdx] = e.target.value;
@@ -171,17 +224,20 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
         );
       })}
 
-      {resume.projects.map((proj, projIdx) => (
+      {resume.projects.map((proj, projIdx) => {
+        const projectBullets =
+          proj.bullets?.length > 0 ? proj.bullets : getProjectBullets(proj);
+        return (
         <SectionBlock
           key={proj.id}
-          title={`Project ${projIdx + 1}${proj.name ? ` — ${proj.name}` : ""}`}
+          title={proj.name.trim() || `Project ${projIdx + 1}`}
         >
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Project Name</Label>
             <Input
               value={proj.name}
               onChange={(e) =>
-                updateTailoredResume((r) => {
+                applyUpdate((r) => {
                   const projects = [...r.projects];
                   projects[projIdx] = { ...proj, name: e.target.value };
                   return { ...r, projects };
@@ -189,41 +245,51 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               }
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Description</Label>
-            <Textarea
-              rows={3}
-              value={proj.description}
-              onChange={(e) =>
-                updateTailoredResume((r) => {
-                  const projects = [...r.projects];
-                  projects[projIdx] = { ...proj, description: e.target.value };
-                  return { ...r, projects };
-                })
-              }
-            />
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">
+              What the project does
+            </Label>
+            {projectBullets.map((bullet, bulletIdx) => (
+              <Textarea
+                key={bulletIdx}
+                rows={2}
+                value={bullet}
+                onChange={(e) =>
+                  applyUpdate((r) => {
+                    const projects = [...r.projects];
+                    const current = projects[projIdx];
+                    const bullets = [
+                      ...(current.bullets?.length
+                        ? current.bullets
+                        : getProjectBullets(current)),
+                    ];
+                    bullets[bulletIdx] = e.target.value;
+                    projects[projIdx] = {
+                      ...current,
+                      bullets,
+                      description: projectDescriptionFromBullets(bullets),
+                    };
+                    return { ...r, projects };
+                  })
+                }
+              />
+            ))}
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Tech Stack</Label>
-            <Input
-              value={(proj.technologies ?? []).join(", ")}
-              onChange={(e) =>
-                updateTailoredResume((r) => {
-                  const projects = [...r.projects];
-                  projects[projIdx] = {
-                    ...proj,
-                    technologies: e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean),
-                  };
-                  return { ...r, projects };
-                })
-              }
-            />
-          </div>
+          <StringListField
+            label="Tech stack"
+            placeholder="e.g. React"
+            values={proj.technologies ?? []}
+            onChange={(technologies) =>
+              applyUpdate((r) => {
+                const projects = [...r.projects];
+                projects[projIdx] = { ...proj, technologies };
+                return { ...r, projects };
+              })
+            }
+          />
         </SectionBlock>
-      ))}
+        );
+      })}
 
       {resume.education.map((edu, eduIdx) => (
         <SectionBlock
@@ -236,7 +302,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               <Input
                 value={edu.institution}
                 onChange={(e) =>
-                  updateTailoredResume((r) => {
+                  applyUpdate((r) => {
                     const education = [...r.education];
                     education[eduIdx] = { ...edu, institution: e.target.value };
                     return { ...r, education };
@@ -249,7 +315,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               <Input
                 value={edu.degree}
                 onChange={(e) =>
-                  updateTailoredResume((r) => {
+                  applyUpdate((r) => {
                     const education = [...r.education];
                     education[eduIdx] = { ...edu, degree: e.target.value };
                     return { ...r, education };
@@ -262,7 +328,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               <Input
                 value={edu.field ?? ""}
                 onChange={(e) =>
-                  updateTailoredResume((r) => {
+                  applyUpdate((r) => {
                     const education = [...r.education];
                     education[eduIdx] = { ...edu, field: e.target.value };
                     return { ...r, education };
@@ -274,39 +340,22 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
         </SectionBlock>
       ))}
 
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium text-muted-foreground">Skills</Label>
-        <Textarea
-          rows={2}
-          value={resume.skills.join(", ")}
-          onChange={(e) =>
-            updateTailoredResume((r) => ({
-              ...r,
-              skills: e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            }))
-          }
-        />
-      </div>
+      <StringListField
+        label="Skills"
+        placeholder="e.g. TypeScript"
+        values={resume.skills}
+        onChange={(skills) =>
+          applyUpdate((r) => ({ ...r, skills }))
+        }
+      />
 
-      <div className="space-y-1.5">
-        <Label className="text-xs font-medium text-muted-foreground">Languages</Label>
-        <Textarea
-          rows={2}
-          value={resume.languages.join(", ")}
-          onChange={(e) =>
-            updateTailoredResume((r) => ({
-              ...r,
-              languages: e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            }))
-          }
-        />
-      </div>
+      <LanguageListField
+        label="Languages"
+        values={resume.languages}
+        onChange={(languages) =>
+          applyUpdate((r) => ({ ...r, languages }))
+        }
+      />
 
       {resume.customSections.map((section, secIdx) => (
         <SectionBlock key={section.id} title={`${section.title || `Section ${secIdx + 1}`}`}>
@@ -315,7 +364,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
             <Input
               value={section.title}
               onChange={(e) =>
-                updateTailoredResume((r) => {
+                applyUpdate((r) => {
                   const customSections = [...r.customSections];
                   customSections[secIdx] = { ...section, title: e.target.value };
                   return { ...r, customSections };
@@ -329,7 +378,7 @@ export function ResumeInlineEditor({ resume }: ResumeInlineEditorProps) {
               rows={4}
               value={section.content}
               onChange={(e) =>
-                updateTailoredResume((r) => {
+                applyUpdate((r) => {
                   const customSections = [...r.customSections];
                   customSections[secIdx] = { ...section, content: e.target.value };
                   return { ...r, customSections };

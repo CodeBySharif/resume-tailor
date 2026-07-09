@@ -1,6 +1,8 @@
 "use client";
 
 import type { Resume } from "@/lib/resume-schema";
+import { getProjectBullets } from "@/lib/resume-schema";
+import { formatExperienceCompanyLine } from "@/lib/experience-format";
 import { formatDateRange } from "@/lib/date-utils";
 import { RESUME_SPACE_EM } from "@/lib/resume-spacing";
 import { ResumeHeaderBlock } from "./ResumeHeaderBlock";
@@ -98,8 +100,7 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
               </ContentBlock>
               <ContentBlock spaced>
                 <p className="leading-tight text-gray-700">
-                  {exp.company}
-                  {exp.location ? `, ${exp.location}` : ""}
+                  {formatExperienceCompanyLine(exp.company, exp.location)}
                 </p>
               </ContentBlock>
               <ContentBlock spaced>
@@ -118,25 +119,43 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
 
       {resume.projects.length > 0 && (
         <ResumeSection title="Projects">
-          {resume.projects.map((proj, index) => (
+          {resume.projects.map((proj, index) => {
+            const bullets = getProjectBullets(proj).filter(Boolean);
+            return (
             <EntryBlock key={proj.id} index={index}>
               <ContentBlock>
                 <p className="text-[10pt] font-semibold leading-none">
                   {proj.name}
                 </p>
               </ContentBlock>
-              <ContentBlock spaced>
-                <p className="leading-tight">{proj.description}</p>
-              </ContentBlock>
+              {bullets.length > 0 && (
+                <ContentBlock spaced>
+                  <ul className="list-disc space-y-0.5 pl-4">
+                    {bullets.map((bullet, i) => (
+                      <li key={i} className="leading-tight">
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </ContentBlock>
+              )}
               {proj.technologies && proj.technologies.length > 0 && (
                 <ContentBlock spaced>
-                  <p className="text-[9pt] leading-tight text-gray-600">
-                    {proj.technologies.join(", ")}
-                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {proj.technologies.map((tech) => (
+                      <span
+                        key={tech}
+                        className="rounded bg-gray-100 px-1.5 py-0.5 text-[8.5pt] leading-tight text-gray-700"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
                 </ContentBlock>
               )}
             </EntryBlock>
-          ))}
+            );
+          })}
         </ResumeSection>
       )}
 
