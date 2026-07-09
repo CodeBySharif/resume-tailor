@@ -18,7 +18,7 @@ export function SmoothProgressBar({ value, className }: SmoothProgressBarProps) 
       )}
     >
       <div
-        className="h-full rounded-full bg-brand-accent transition-[width] duration-75 ease-out"
+        className="h-full rounded-full bg-brand-accent"
         style={{ width: `${clamped}%` }}
       />
     </div>

@@ -126,7 +126,7 @@ export function MonthYearInput({
             type="button"
             disabled={disabled}
             className={cn(
-              "inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-input bg-background px-2.5 text-sm shadow-xs transition-colors hover:bg-muted/50",
+              "inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-sm shadow-xs transition-colors hover:bg-muted/50",
               !value && "text-muted-foreground"
             )}
             title={display}

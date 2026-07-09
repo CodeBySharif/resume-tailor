@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildParseResumePrompt } from "@/lib/prompts";
+import { buildAtsFixPrompt } from "@/lib/prompts";
+import type { AtsCheckResult } from "@/lib/ats-types";
 import { generateJSON, LLMProviderError } from "@/lib/llm/client";
+import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
 import {
   DEFAULT_LLM_SETTINGS,
   normalizeResume,
   type LLMSettings,
+  type Resume,
 } from "@/lib/resume-schema";
-import { extractJsonObject } from "@/lib/resume-parse-sanitize";
-import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
+import {
+  DEFAULT_GENERATION_STYLE,
+  type GenerationStyle,
+} from "@/lib/writing-tone";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { text, settings } = body as {
-      text: string;
+    const { resume, atsResult, generationStyle, settings } = body as {
+      resume: Resume;
+      atsResult: AtsCheckResult;
+      generationStyle?: Partial<GenerationStyle>;
       settings?: Partial<LLMSettings>;
     };
 
-    if (!text || typeof text !== "string") {
+    if (!resume || !atsResult) {
       return NextResponse.json(
-        { error: "Resume text is required" },
+        { error: "Resume and ATS result are required" },
         { status: 400 }
       );
     }
@@ -34,15 +41,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: keyError }, { status: 400 });
     }
 
-    const prompt = buildParseResumePrompt(text);
+    const style: GenerationStyle = {
+      ...DEFAULT_GENERATION_STYLE,
+      ...generationStyle,
+    };
+
+    const normalizedResume = normalizeResume(resume);
+    const prompt = buildAtsFixPrompt(normalizedResume, atsResult, style);
     const llm = await generateJSON(prompt, llmSettings);
-    const parsed = extractJsonObject(llm.text) as Partial<
-      import("@/lib/resume-schema").Resume
-    >;
-    const resume = normalizeResume(parsed, { sanitizeArtifacts: true });
+    const parsed = JSON.parse(llm.text) as { resume: Resume };
 
     return NextResponse.json({
-      resume,
+      resume: normalizeResume(parsed.resume),
       meta: {
         provider: llm.provider,
         totalDurationMs: llm.totalDurationMs,
@@ -51,7 +61,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Failed to parse resume";
+      error instanceof Error ? error.message : "Failed to improve resume";
     const attempts =
       error instanceof LLMProviderError ? error.attempts : undefined;
     return NextResponse.json({ error: message, meta: { attempts } }, { status: 500 });

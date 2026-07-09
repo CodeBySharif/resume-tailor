@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import {
+  createAtsScaffoldResume,
   createEmptyJobDetails,
   createEmptyResume,
   DEFAULT_LLM_SETTINGS,
@@ -14,15 +15,61 @@ import {
   DEFAULT_GENERATION_STYLE,
   type GenerationStyle,
 } from "@/lib/writing-tone";
+import type { AtsCheckResult } from "@/lib/ats-types";
+import type { ResumeSuggestResult } from "@/lib/resume-suggest-types";
+import { resumeHasParseArtifacts } from "@/lib/resume-parse-sanitize";
 import { normalizePrintableText } from "@/lib/text-normalize";
 
+export type AppFlow = "landing" | "create" | "tailor" | "ats";
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
 
+function finalizeResume(resume: Resume): Resume {
+  const normalized = normalizeResume(resume);
+  if (resumeHasParseArtifacts(normalized)) {
+    return normalizeResume(normalized, { sanitizeArtifacts: true });
+  }
+  return normalized;
+}
+
+function maxStepForFlow(flow: AppFlow): number {
+  if (flow === "create") return 4;
+  if (flow === "ats") return 4;
+  if (flow === "tailor") return 5;
+  return 1;
+}
+
+function clearFlowState() {
+  return {
+    resume: createEmptyResume(),
+    originalResume: null as Resume | null,
+    tailoredResume: null as Resume | null,
+    fixedResume: null as Resume | null,
+    createdResume: null as Resume | null,
+    coverLetter: "",
+    changes: [] as ResumeChange[],
+    jobDetails: createEmptyJobDetails(),
+    generationStyle: DEFAULT_GENERATION_STYLE,
+    isLoading: false,
+    error: null as string | null,
+    atsResult: null as AtsCheckResult | null,
+    atsChecking: false,
+    atsError: null as string | null,
+    fixedAtsResult: null as AtsCheckResult | null,
+    fixedAtsChecking: false,
+    resumeSuggestions: null as ResumeSuggestResult | null,
+    suggestLoading: false,
+    suggestError: null as string | null,
+  };
+}
+
 interface ResumeStore {
+  flow: AppFlow;
   step: WizardStep;
   resume: Resume;
   originalResume: Resume | null;
   tailoredResume: Resume | null;
+  fixedResume: Resume | null;
+  createdResume: Resume | null;
   coverLetter: string;
   changes: ResumeChange[];
   jobDetails: JobDetails;
@@ -30,8 +77,21 @@ interface ResumeStore {
   llmSettings: LLMSettings;
   isLoading: boolean;
   error: string | null;
+  atsResult: AtsCheckResult | null;
+  atsChecking: boolean;
+  atsError: string | null;
+  fixedAtsResult: AtsCheckResult | null;
+  fixedAtsChecking: boolean;
+  resumeSuggestions: ResumeSuggestResult | null;
+  suggestLoading: boolean;
+  suggestError: string | null;
 
+  setFlow: (flow: AppFlow) => void;
   setStep: (step: WizardStep) => void;
+  startCreateFlow: () => void;
+  startTailorFlow: () => void;
+  startAtsFlow: () => void;
+  goToLanding: () => void;
   nextStep: () => void;
   prevStep: () => void;
   setResume: (resume: Resume) => void;
@@ -39,6 +99,10 @@ interface ResumeStore {
   setOriginalResume: (resume: Resume) => void;
   setTailoredResume: (resume: Resume) => void;
   updateTailoredResume: (updater: (resume: Resume) => Resume) => void;
+  setFixedResume: (resume: Resume) => void;
+  updateFixedResume: (updater: (resume: Resume) => Resume) => void;
+  setCreatedResume: (resume: Resume) => void;
+  updateCreatedResume: (updater: (resume: Resume) => Resume) => void;
   setCoverLetter: (letter: string) => void;
   setChanges: (changes: ResumeChange[]) => void;
   setJobDetails: (details: JobDetails) => void;
@@ -50,6 +114,16 @@ interface ResumeStore {
   saveLLMSettings: (settings: LLMSettings) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setAtsResult: (result: AtsCheckResult | null) => void;
+  setAtsChecking: (checking: boolean) => void;
+  setAtsError: (error: string | null) => void;
+  clearAtsResult: () => void;
+  setFixedAtsResult: (result: AtsCheckResult | null) => void;
+  setFixedAtsChecking: (checking: boolean) => void;
+  clearFixedAtsResult: () => void;
+  setResumeSuggestions: (result: ResumeSuggestResult | null) => void;
+  setSuggestLoading: (loading: boolean) => void;
+  setSuggestError: (error: string | null) => void;
   resetGeneration: () => void;
   resetAll: () => void;
 }
@@ -82,11 +156,14 @@ function loadSettingsFromStorage(): LLMSettings {
   return DEFAULT_LLM_SETTINGS;
 }
 
-export const useResumeStore = create<ResumeStore>((set, get) => ({
+export const useResumeStore = create<ResumeStore>((set) => ({
+  flow: "landing",
   step: 1,
   resume: createEmptyResume(),
   originalResume: null,
   tailoredResume: null,
+  fixedResume: null,
+  createdResume: null,
   coverLetter: "",
   changes: [],
   jobDetails: createEmptyJobDetails(),
@@ -94,17 +171,68 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
   llmSettings: DEFAULT_LLM_SETTINGS,
   isLoading: false,
   error: null,
+  atsResult: null,
+  atsChecking: false,
+  atsError: null,
+  fixedAtsResult: null,
+  fixedAtsChecking: false,
+  resumeSuggestions: null,
+  suggestLoading: false,
+  suggestError: null,
 
+  setFlow: (flow) => set({ flow }),
   setStep: (step) => set({ step }),
-  nextStep: () => set((s) => ({ step: Math.min(5, s.step + 1) as WizardStep })),
-  prevStep: () => set((s) => ({ step: Math.max(1, s.step - 1) as WizardStep })),
-  setResume: (resume) => set({ resume: normalizeResume(resume) }),
-  updateResume: (updater) => set((s) => ({ resume: updater(s.resume) })),
-  setOriginalResume: (resume) => set({ originalResume: normalizeResume(resume) }),
-  setTailoredResume: (resume) => set({ tailoredResume: normalizeResume(resume) }),
+  startCreateFlow: () =>
+    set({
+      flow: "create",
+      step: 1,
+      ...clearFlowState(),
+      resume: createAtsScaffoldResume(),
+    }),
+  startTailorFlow: () =>
+    set({
+      flow: "tailor",
+      step: 1,
+      ...clearFlowState(),
+    }),
+  startAtsFlow: () =>
+    set({
+      flow: "ats",
+      step: 1,
+      ...clearFlowState(),
+    }),
+  goToLanding: () =>
+    set({
+      flow: "landing",
+      step: 1,
+      ...clearFlowState(),
+    }),
+  nextStep: () =>
+    set((s) => ({
+      step: Math.min(maxStepForFlow(s.flow), s.step + 1) as WizardStep,
+    })),
+  prevStep: () =>
+    set((s) => ({
+      step: Math.max(1, s.step - 1) as WizardStep,
+    })),
+  setResume: (resume) => set({ resume: finalizeResume(resume) }),
+  updateResume: (updater) =>
+    set((s) => ({ resume: updater(s.resume) })),
+  setOriginalResume: (resume) => set({ originalResume: finalizeResume(resume) }),
+  setTailoredResume: (resume) => set({ tailoredResume: finalizeResume(resume) }),
   updateTailoredResume: (updater) =>
     set((s) => ({
       tailoredResume: s.tailoredResume ? updater(s.tailoredResume) : null,
+    })),
+  setFixedResume: (resume) => set({ fixedResume: finalizeResume(resume) }),
+  updateFixedResume: (updater) =>
+    set((s) => ({
+      fixedResume: s.fixedResume ? updater(s.fixedResume) : null,
+    })),
+  setCreatedResume: (resume) => set({ createdResume: finalizeResume(resume) }),
+  updateCreatedResume: (updater) =>
+    set((s) => ({
+      createdResume: s.createdResume ? updater(s.createdResume) : null,
     })),
   setCoverLetter: (letter) =>
     set({ coverLetter: normalizePrintableText(letter) }),
@@ -130,19 +258,39 @@ export const useResumeStore = create<ResumeStore>((set, get) => ({
   },
   setLoading: (loading) => set({ isLoading: loading }),
   setError: (error) => set({ error }),
+  setAtsResult: (result) => set({ atsResult: result, atsError: null }),
+  setAtsChecking: (checking) => set({ atsChecking: checking }),
+  setAtsError: (error) => set({ atsError: error }),
+  clearAtsResult: () => set({ atsResult: null, atsError: null, atsChecking: false }),
+  setFixedAtsResult: (result) => set({ fixedAtsResult: result }),
+  setFixedAtsChecking: (checking) => set({ fixedAtsChecking: checking }),
+  clearFixedAtsResult: () =>
+    set({ fixedAtsResult: null, fixedAtsChecking: false }),
+  setResumeSuggestions: (result) =>
+    set({ resumeSuggestions: result, suggestError: null }),
+  setSuggestLoading: (loading) => set({ suggestLoading: loading }),
+  setSuggestError: (error) => set({ suggestError: error }),
   resetGeneration: () =>
-    set({ tailoredResume: null, coverLetter: "", changes: [], error: null }),
-  resetAll: () =>
     set({
-      step: 1,
-      resume: createEmptyResume(),
-      originalResume: null,
       tailoredResume: null,
+      fixedResume: null,
+      createdResume: null,
       coverLetter: "",
       changes: [],
-      jobDetails: createEmptyJobDetails(),
-      generationStyle: DEFAULT_GENERATION_STYLE,
-      isLoading: false,
       error: null,
+      atsResult: null,
+      atsError: null,
+      atsChecking: false,
+      fixedAtsResult: null,
+      fixedAtsChecking: false,
+      resumeSuggestions: null,
+      suggestError: null,
+      suggestLoading: false,
+    }),
+  resetAll: () =>
+    set({
+      flow: "landing",
+      step: 1,
+      ...clearFlowState(),
     }),
 }));

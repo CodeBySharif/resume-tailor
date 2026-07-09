@@ -1,27 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildParseResumePrompt } from "@/lib/prompts";
+import { buildResumeSuggestPrompt } from "@/lib/prompts";
+import { normalizeResumeSuggestResult } from "@/lib/resume-suggest-types";
 import { generateJSON, LLMProviderError } from "@/lib/llm/client";
+import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
 import {
   DEFAULT_LLM_SETTINGS,
   normalizeResume,
   type LLMSettings,
+  type Resume,
 } from "@/lib/resume-schema";
-import { extractJsonObject } from "@/lib/resume-parse-sanitize";
-import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { text, settings } = body as {
-      text: string;
+    const { resume, settings } = body as {
+      resume: Resume;
       settings?: Partial<LLMSettings>;
     };
 
-    if (!text || typeof text !== "string") {
-      return NextResponse.json(
-        { error: "Resume text is required" },
-        { status: 400 }
-      );
+    if (!resume) {
+      return NextResponse.json({ error: "Resume is required" }, { status: 400 });
     }
 
     const llmSettings: LLMSettings = {
@@ -34,15 +32,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: keyError }, { status: 400 });
     }
 
-    const prompt = buildParseResumePrompt(text);
+    const normalizedResume = normalizeResume(resume);
+    const prompt = buildResumeSuggestPrompt(normalizedResume);
     const llm = await generateJSON(prompt, llmSettings);
-    const parsed = extractJsonObject(llm.text) as Partial<
-      import("@/lib/resume-schema").Resume
-    >;
-    const resume = normalizeResume(parsed, { sanitizeArtifacts: true });
+    const parsed = JSON.parse(llm.text);
+    const result = normalizeResumeSuggestResult(parsed);
 
     return NextResponse.json({
-      resume,
+      ...result,
       meta: {
         provider: llm.provider,
         totalDurationMs: llm.totalDurationMs,
@@ -51,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Failed to parse resume";
+      error instanceof Error ? error.message : "Failed to get suggestions";
     const attempts =
       error instanceof LLMProviderError ? error.attempts : undefined;
     return NextResponse.json({ error: message, meta: { attempts } }, { status: 500 });

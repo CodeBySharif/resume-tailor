@@ -60,7 +60,7 @@ export function ReviewStep() {
 
   const displayResume = normalizeResume(tailoredResume ?? originalResume ?? {});
 
-  if (!displayResume) {
+  if (!displayResume.header.name && !displayResume.experience.length) {
     return (
       <p className="text-muted-foreground">No tailored resume available.</p>
     );
@@ -125,8 +125,10 @@ export function ReviewStep() {
           </div>
           {editingResume ? (
             <div className="space-y-4">
-              <ReviewHeaderEditor />
-              {tailoredResume ? <ResumeInlineEditor resume={tailoredResume} /> : null}
+              <ReviewHeaderEditor target="tailored" />
+              {tailoredResume ? (
+                <ResumeInlineEditor resume={tailoredResume} target="tailored" />
+              ) : null}
             </div>
           ) : null}
           <ResumePreview resume={displayResume} />
@@ -194,7 +196,7 @@ export function ReviewStep() {
           </div>
           {editingCover ? (
             <div className="space-y-4">
-              <ReviewHeaderEditor />
+              <ReviewHeaderEditor target="tailored" />
               <Card>
                 <CardHeader>
                   <CardTitle>Edit Cover Letter Body</CardTitle>

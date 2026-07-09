@@ -15,9 +15,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { SmoothProgressBar } from "@/components/ui/smooth-progress-bar";
+import { OperationProgress } from "@/components/ui/operation-progress";
+import { DocumentSkeleton } from "@/components/ui/document-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { StepChoice, StepShell } from "@/components/wizard/StepShell";
 import { TonePicker } from "./TonePicker";
 import {
   formatAttemptLog,
@@ -28,6 +30,7 @@ import { getTailorDurationMs } from "@/lib/llm/progress-estimates";
 import type { LLMAttempt } from "@/lib/llm/types";
 import { getToneLabel } from "@/lib/writing-tone";
 import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
+import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
 import { useResumeStore } from "@/store/resume-store";
 
 const PHASE_LABELS = [
@@ -37,43 +40,13 @@ const PHASE_LABELS = [
   "Finalizing documents…",
 ];
 
-function easeOutQuad(t: number): number {
-  return t * (2 - t);
-}
-
-function animateProgress(
-  from: number,
-  to: number,
-  durationMs: number,
-  onUpdate: (value: number) => void
-): Promise<void> {
-  return new Promise((resolve) => {
-    const start = performance.now();
-    const step = (now: number) => {
-      const t = Math.min(1, (now - start) / durationMs);
-      const value = from + (to - from) * easeOutQuad(t);
-      onUpdate(value);
-      if (t >= 1) {
-        onUpdate(to);
-        resolve();
-        return;
-      }
-      requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  });
-}
-
 export function GenerateStep() {
   const genIdRef = useRef(0);
   const phaseTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const progressRef = useRef(0);
   const elapsedStartRef = useRef(0);
 
   const [started, setStarted] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState("");
   const [elapsedSec, setElapsedSec] = useState(0);
   const [providerUsed, setProviderUsed] = useState<string | null>(null);
   const [attemptLog, setAttemptLog] = useState<LLMAttempt[] | null>(null);
@@ -84,7 +57,6 @@ export function GenerateStep() {
     jobDetails,
     generationStyle,
     llmSettings,
-    changes,
     setLoading,
     setError,
     setTailoredResume,
@@ -97,12 +69,8 @@ export function GenerateStep() {
   } = useResumeStore();
 
   const durationMs = getTailorDurationMs(llmSettings.provider);
-  const displayPercent = Math.min(100, Math.round(progress));
-
-  function updateProgress(value: number) {
-    progressRef.current = value;
-    setProgress(value);
-  }
+  const { value: progress, status, setStatus, start, finish, reset } =
+    useTimedOperationProgress(durationMs);
 
   function clearPhaseTimer() {
     if (phaseTimer.current) {
@@ -120,27 +88,6 @@ export function GenerateStep() {
       setStatus(PHASE_LABELS[phaseIndex]);
     }, 3500);
   }
-
-  useEffect(() => {
-    if (!generating) return;
-
-    const cap = 90;
-    const start = performance.now();
-
-    const tick = () => {
-      const elapsed = performance.now() - start;
-      const t = Math.min(1, elapsed / durationMs);
-      let value = easeOutQuad(t) * cap;
-      if (t >= 1) {
-        value = cap;
-      }
-      updateProgress(value);
-    };
-
-    tick();
-    const id = setInterval(tick, 80);
-    return () => clearInterval(id);
-  }, [generating, durationMs]);
 
   useEffect(() => {
     if (!generating) return;
@@ -171,7 +118,8 @@ export function GenerateStep() {
     setProviderUsed(null);
     setAttemptLog(null);
     setElapsedSec(0);
-    updateProgress(0);
+    reset();
+    start();
     setStatus("Starting generation…");
     startPhaseRotation();
 
@@ -199,7 +147,7 @@ export function GenerateStep() {
 
       clearPhaseTimer();
       setStatus("Finishing up…");
-      await animateProgress(progressRef.current, 100, 450, updateProgress);
+      await finish();
 
       if (genId !== genIdRef.current) return;
 
@@ -215,7 +163,7 @@ export function GenerateStep() {
     } catch (err) {
       if (genId !== genIdRef.current) return;
       clearPhaseTimer();
-      updateProgress(0);
+      reset();
       const msg = err instanceof Error ? err.message : "Generation failed";
       setLocalError(msg);
       setError(msg);
@@ -237,38 +185,26 @@ export function GenerateStep() {
 
   if (!started) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Choose Your Writing Voice</h2>
-            <p className="text-sm text-muted-foreground">
-              Pick how your resume and cover letter should sound for{" "}
-              {jobDetails.role} at {jobDetails.company}
-            </p>
-          </div>
+      <StepShell
+        title="Choose Your Writing Voice"
+        description={`Pick how your resume and cover letter should sound for ${jobDetails.role} at ${jobDetails.company}`}
+        actions={
           <Button variant="outline" size="sm" onClick={prevStep}>
             <ChevronLeft className="size-4" />
             Back
           </Button>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Writing Style</CardTitle>
-            <CardDescription>
-              Each voice changes wording and emphasis — not layout. Metrics-Driven
-              emphasizes quantified impact and can include draft values that you
-              can fine-tune in review.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+        }
+      >
+        <StepChoice
+          title="Writing style"
+          description="Each voice changes wording and emphasis — not layout. Metrics-Driven adds conservative draft numbers you can adjust in review."
+        >
+          <div className="space-y-6">
             <TonePicker
               label="Resume voice"
               description="How experience bullets and summary are written"
               value={generationStyle.resumeTone}
-              onChange={(resumeTone) =>
-                updateGenerationStyle({ resumeTone })
-              }
+              onChange={(resumeTone) => updateGenerationStyle({ resumeTone })}
               exampleType="resume"
             />
 
@@ -284,7 +220,7 @@ export function GenerateStep() {
               exampleType="coverLetter"
             />
 
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background px-4 py-3 text-sm">
               <span className="text-muted-foreground">Selected:</span>
               <Badge variant="secondary">
                 Resume — {getToneLabel(generationStyle.resumeTone)}
@@ -301,28 +237,23 @@ export function GenerateStep() {
             >
               Generate Resume & Cover Letter
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </StepChoice>
+      </StepShell>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Generating…</h2>
-          <p className="text-sm text-muted-foreground">
-            {getToneLabel(generationStyle.resumeTone)} resume ·{" "}
-            {getToneLabel(generationStyle.coverLetterTone)} cover letter
-          </p>
-        </div>
+    <StepShell
+      title="Generating…"
+      description={`${getToneLabel(generationStyle.resumeTone)} resume · ${getToneLabel(generationStyle.coverLetterTone)} cover letter`}
+      actions={
         <Button variant="outline" size="sm" onClick={prevStep} disabled={generating}>
           <ChevronLeft className="size-4" />
           Back
         </Button>
-      </div>
-
+      }
+    >
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -338,10 +269,7 @@ export function GenerateStep() {
           <CardDescription>
             Primary:{" "}
             <Badge variant="secondary">
-              {getProviderLabel(
-                llmSettings.provider,
-                llmSettings.openrouterModel
-              )}
+              {getProviderLabel(llmSettings.provider, llmSettings.openrouterModel)}
             </Badge>
             {providerUsed && (
               <>
@@ -356,20 +284,19 @@ export function GenerateStep() {
         </CardHeader>
         <CardContent className="space-y-4">
           {generating && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">Generation progress</span>
-                <span className="tabular-nums font-medium text-brand-accent">
-                  {displayPercent}%
-                </span>
+            <>
+              <OperationProgress
+                value={progress}
+                label="Generation progress"
+                status={status}
+                hint={liveHint}
+                elapsedSec={elapsedSec}
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <DocumentSkeleton variant="resume" />
+                <DocumentSkeleton variant="cover" />
               </div>
-              <SmoothProgressBar value={progress} />
-              <p className="text-sm font-medium">{status || "Processing…"}</p>
-              <p className="text-sm text-muted-foreground">{liveHint}</p>
-              <p className="text-xs text-muted-foreground tabular-nums">
-                Elapsed: {elapsedSec}s
-              </p>
-            </div>
+            </>
           )}
 
           {error && (
@@ -398,14 +325,8 @@ export function GenerateStep() {
               </div>
             </div>
           )}
-
-          {attemptLog && attemptLog.length > 0 && !generating && !error && (
-            <p className="text-xs text-muted-foreground">
-              {formatAttemptLog(attemptLog)}
-            </p>
-          )}
         </CardContent>
       </Card>
-    </div>
+    </StepShell>
   );
 }
