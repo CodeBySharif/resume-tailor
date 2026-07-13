@@ -9,6 +9,7 @@ import { ATS_CHECK_JSON_SCHEMA } from "./ats-types";
 import {
   buildAtsPrecheckHints,
   formatPrecheckForPrompt,
+  getAtsTodayContext,
 } from "./ats-precheck";
 
 const SHARED_RESUME_WRITING_RULES = `
@@ -188,6 +189,8 @@ Score these 10 categories (weights must sum to 100):
 
 Rules:
 - Base every finding on actual resume content — cite specific bullets or fields
+- Use the pre-check "Today's date" as ground truth for any past/current/future date judgment
+- Do NOT flag employment dates as future unless they are after the pre-check today year-month
 - overallScore must equal the weighted average of category scores (weight × score / 100)
 - status: pass ≥75, warning 55–74, fail <55
 - grade: Excellent ≥90, Good ≥75, Fair ≥60, Needs Work <60
@@ -224,6 +227,8 @@ Score these 10 categories (weights must sum to 100):
 
 Rules:
 - Base every finding on actual resume content — cite specific bullets or fields
+- Use the pre-check "Today's date" as ground truth for any past/current/future date judgment
+- Do NOT flag employment dates as future unless they are after the pre-check today year-month
 - overallScore must equal the weighted average of category scores (weight × score / 100)
 - status: pass ≥75, warning 55–74, fail <55
 - grade: Excellent ≥90, Good ≥75, Fair ≥60, Needs Work <60
@@ -245,10 +250,16 @@ export function buildAtsFixPrompt(
     (c) => c.status === "fail" || c.status === "warning"
   );
   const resumeTone = getToneOption(style.resumeTone);
+  const { todayLabel, todayYearMonth } = getAtsTodayContext();
 
   return `You are an expert resume writer specializing in ATS-friendly resumes. Improve the resume to address ATS issues identified in the analysis while keeping all claims truthful.
 
 Writing voice — Resume tone (${resumeTone.label}): ${resumeTone.resumePrompt}
+
+Today's date (ground truth): ${todayLabel} (${todayYearMonth})
+- Only treat employment dates as future if they are AFTER ${todayYearMonth}
+- Do NOT "correct" or rewrite dates that are on or before ${todayYearMonth}
+- Ignore any ATS suggestions that wrongly claim past/current dates are future
 
 Current Resume (JSON):
 ${JSON.stringify(resume, null, 2)}
@@ -274,6 +285,7 @@ Instructions:
 4. Improve formatting, action verbs, section clarity, and quantification only where supported by existing content
 5. Use standard ATS-parseable layout: single column, standard headings, no tables or graphics
 6. Strengthen skills presentation and professional summary without inventing skills
+7. Preserve valid employment dates; only change dates if they are clearly after ${todayYearMonth} or malformed
 ${SHARED_RESUME_WRITING_RULES}
 
 Return JSON with this exact structure:
