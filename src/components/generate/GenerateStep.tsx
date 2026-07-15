@@ -34,6 +34,11 @@ import { readJsonResponse } from "@/lib/api-response";
 import type { Resume, ResumeChange } from "@/lib/resume-schema";
 import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
 import { useResumeStore } from "@/store/resume-store";
+import { AiContentDisclaimer } from "@/components/ui/ai-content-disclaimer";
+import {
+  BulletLockPanel,
+  collectAllRewriteLocks,
+} from "@/components/resume/BulletLockPanel";
 
 const PHASE_LABELS = [
   "Tailoring resume…",
@@ -59,13 +64,18 @@ export function GenerateStep() {
     jobDetails,
     generationStyle,
     llmSettings,
+    rewriteLocks,
     setLoading,
     setError,
     setTailoredResume,
     setCoverLetter,
+    setCoverLetterMode,
     setChanges,
     setOriginalResume,
     updateGenerationStyle,
+    toggleRewriteLock,
+    setRewriteLocks,
+    clearRewriteLocks,
     prevStep,
     nextStep,
   } = useResumeStore();
@@ -136,6 +146,7 @@ export function GenerateStep() {
           jobDetails,
           generationStyle,
           settings: llmSettings,
+          rewriteLocks,
         }),
       });
 
@@ -168,6 +179,7 @@ export function GenerateStep() {
 
       setTailoredResume(data.resume);
       setCoverLetter(data.coverLetter ?? "");
+      setCoverLetterMode("templated");
       setChanges(data.changes ?? []);
       setGenerating(false);
       setLoading(false);
@@ -209,9 +221,13 @@ export function GenerateStep() {
       >
         <StepChoice
           title="Writing style"
-          description="Each voice changes wording and emphasis — not layout. Metrics-Driven adds conservative draft numbers you can adjust in review."
+          description={
+            "Each voice changes wording and emphasis — not layout. Choose “Don't rewrite” on the resume to keep your original wording (with only light ATS keyword alignment). Metrics-Driven adds conservative draft numbers you can adjust in review."
+          }
         >
           <div className="space-y-6">
+            <AiContentDisclaimer />
+
             <TonePicker
               label="Resume voice"
               description="How experience bullets and summary are written"
@@ -232,6 +248,14 @@ export function GenerateStep() {
               exampleType="coverLetter"
             />
 
+            <BulletLockPanel
+              resume={resume}
+              locks={rewriteLocks}
+              onToggle={toggleRewriteLock}
+              onLockAll={() => setRewriteLocks(collectAllRewriteLocks(resume))}
+              onUnlockAll={clearRewriteLocks}
+            />
+
             <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-background px-4 py-3 text-sm">
               <span className="text-muted-foreground">Selected:</span>
               <Badge variant="secondary">
@@ -240,6 +264,11 @@ export function GenerateStep() {
               <Badge variant="secondary">
                 Cover letter — {getToneLabel(generationStyle.coverLetterTone)}
               </Badge>
+              {rewriteLocks.length > 0 && (
+                <Badge variant="outline">
+                  {rewriteLocks.length} locked
+                </Badge>
+              )}
             </div>
 
             <Button

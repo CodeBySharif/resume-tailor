@@ -13,16 +13,19 @@ import {
   DEFAULT_GENERATION_STYLE,
   type GenerationStyle,
 } from "@/lib/writing-tone";
+import { applyRewriteLocks } from "@/lib/rewrite-locks";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resume, atsResult, generationStyle, settings } = body as {
-      resume: Resume;
-      atsResult: AtsCheckResult;
-      generationStyle?: Partial<GenerationStyle>;
-      settings?: Partial<LLMSettings>;
-    };
+    const { resume, atsResult, generationStyle, settings, rewriteLocks } =
+      body as {
+        resume: Resume;
+        atsResult: AtsCheckResult;
+        generationStyle?: Partial<GenerationStyle>;
+        settings?: Partial<LLMSettings>;
+        rewriteLocks?: string[];
+      };
 
     if (!resume || !atsResult) {
       return NextResponse.json(
@@ -46,13 +49,23 @@ export async function POST(request: NextRequest) {
       ...generationStyle,
     };
 
+    const locks = Array.isArray(rewriteLocks) ? rewriteLocks : [];
     const normalizedResume = normalizeResume(resume);
-    const prompt = buildAtsFixPrompt(normalizedResume, atsResult, style);
+    const prompt = buildAtsFixPrompt(
+      normalizedResume,
+      atsResult,
+      style,
+      locks
+    );
     const llm = await generateJSON(prompt, llmSettings);
     const parsed = JSON.parse(llm.text) as { resume: Resume };
 
     return NextResponse.json({
-      resume: normalizeResume(parsed.resume),
+      resume: applyRewriteLocks(
+        normalizedResume,
+        normalizeResume(parsed.resume),
+        locks
+      ),
       meta: {
         provider: llm.provider,
         totalDurationMs: llm.totalDurationMs,

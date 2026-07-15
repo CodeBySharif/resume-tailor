@@ -12,14 +12,33 @@ const NAV_ITEMS: {
 }[] = [
   { id: "home", label: "Home", action: (s) => s.goToLanding() },
   { id: "create", label: "Create Resume", action: (s) => s.startCreateFlow() },
+  {
+    id: "edit-resume",
+    label: "Edit Resume",
+    action: (s) => s.startEditResumeFlow(),
+  },
   { id: "tailor", label: "Tailor Resume", action: (s) => s.startTailorFlow() },
   { id: "ats", label: "ATS Checker", action: (s) => s.startAtsFlow() },
+  {
+    id: "generate-cv",
+    label: "Generate Cover Letter",
+    action: (s) => s.startGenerateCvFlow(),
+  },
+  {
+    id: "edit-cover",
+    label: "Edit Cover Letter",
+    action: (s) => s.startEditCoverFlow(),
+  },
 ];
 
 function flowBadgeLabel(flow: AppFlow): string {
-  if (flow === "create") return "Create flow";
-  if (flow === "tailor") return "Tailor flow";
-  return "ATS flow";
+  if (flow === "create") return "Create Resume";
+  if (flow === "edit-resume") return "Edit Resume";
+  if (flow === "tailor") return "Tailor Resume";
+  if (flow === "ats") return "ATS Checker";
+  if (flow === "generate-cv") return "Generate Cover Letter";
+  if (flow === "edit-cover") return "Edit Cover Letter";
+  return "Home";
 }
 
 export function FlowNav() {
@@ -44,16 +63,13 @@ export function FlowNav() {
     return id === "home" ? flow === "landing" : flow === id;
   }
 
-  function handleNav(
-    item: (typeof NAV_ITEMS)[number]
-  ) {
+  function handleNav(item: (typeof NAV_ITEMS)[number]) {
     item.action(store);
     setMenuOpen(false);
   }
 
   return (
     <nav className="mt-3" aria-label="Main navigation">
-      {/* Desktop tabs */}
       <div className="hidden flex-wrap items-center gap-1 sm:flex">
         {NAV_ITEMS.map((item) => (
           <button
@@ -77,7 +93,6 @@ export function FlowNav() {
         )}
       </div>
 
-      {/* Mobile: hamburger + current flow badge */}
       <div className="flex items-center gap-2 sm:hidden">
         <button
           type="button"

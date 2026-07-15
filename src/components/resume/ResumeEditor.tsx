@@ -65,11 +65,17 @@ export function ResumeEditor({
   description = "Review and refine your resume before tailoring",
   onBack,
   showContinueRequirements = false,
+  embedded = false,
+  allowContinueWithoutContact = false,
 }: {
   title?: string;
   description?: string;
   onBack?: () => void;
   showContinueRequirements?: boolean;
+  /** Hide the top Back/Continue bar (parent provides navigation). */
+  embedded?: boolean;
+  /** Allow Continue without name/email (e.g. cover-letter-only edit flows). */
+  allowContinueWithoutContact?: boolean;
 } = {}) {
   const { resume, updateResume, prevStep, nextStep } = useResumeStore();
 
@@ -77,9 +83,11 @@ export function ResumeEditor({
     ? getResumeBuildMissingFields(resume)
     : [];
 
-  const canContinue = showContinueRequirements
-    ? missingRequired.length === 0
-    : Boolean(resume.header.name.trim() && resume.header.email.trim());
+  const canContinue = allowContinueWithoutContact
+    ? true
+    : showContinueRequirements
+      ? missingRequired.length === 0
+      : Boolean(resume.header.name.trim() && resume.header.email.trim());
 
   const req = showContinueRequirements ? " *" : "";
 
@@ -87,29 +95,31 @@ export function ResumeEditor({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+      {!embedded && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleBack}>
+              <ChevronLeft className="size-4" />
+              Back
+            </Button>
+            <Button
+              size="sm"
+              disabled={!canContinue}
+              onClick={nextStep}
+              className="bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90"
+            >
+              Continue
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={handleBack}>
-            <ChevronLeft className="size-4" />
-            Back
-          </Button>
-          <Button
-            size="sm"
-            disabled={!canContinue}
-            onClick={nextStep}
-            className="bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90"
-          >
-            Continue
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      </div>
+      )}
 
-      {showContinueRequirements && !canContinue && (
+      {showContinueRequirements && !canContinue && !embedded && (
         <ContinueRequirementsHint missing={missingRequired} />
       )}
 

@@ -18,6 +18,7 @@ import { DocumentSkeleton } from "@/components/ui/document-skeleton";
 import { ResumeVoicePanel } from "@/components/generate/ResumeVoicePanel";
 import { StepChoice, StepShell } from "@/components/wizard/StepShell";
 import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
+import { isPreserveTone } from "@/lib/writing-tone";
 import { useResumeStore } from "@/store/resume-store";
 
 export function CreateGenerateStep() {
@@ -42,6 +43,8 @@ export function CreateGenerateStep() {
   const { value: progress, status, setStatus, start, finish, reset } =
     useTimedOperationProgress(durationMs);
 
+  const preserve = isPreserveTone(generationStyle.resumeTone);
+
   useEffect(() => {
     if (!generating) return;
     elapsedStartRef.current = Date.now();
@@ -50,6 +53,11 @@ export function CreateGenerateStep() {
     }, 1000);
     return () => clearInterval(id);
   }, [generating]);
+
+  function continueWithoutRewrite() {
+    setCreatedResume(resume);
+    nextStep();
+  }
 
   async function runEnhance(mode: "enhance" | "polish") {
     if (!resumeSuggestions) return;
@@ -68,7 +76,7 @@ export function CreateGenerateStep() {
     setElapsedSec(0);
     reset();
     start();
-    setStatus(mode === "enhance" ? "Enhancing resume…" : "Polishing resume…");
+    setStatus(mode === "enhance" ? "Rewriting resume…" : "Light rewrite…");
 
     try {
       const result = await fetchResumeEnhance(
@@ -113,9 +121,14 @@ export function CreateGenerateStep() {
   return (
     <StepShell
       title="Generate Resume"
-      description="Choose your writing voice and how much AI should change your content"
+      description="Choose your writing voice — or skip rewrite and go straight to download"
       actions={
-        <Button variant="outline" size="sm" onClick={prevStep} disabled={generating}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={prevStep}
+          disabled={generating}
+        >
           <ChevronLeft className="size-4" />
           Back
         </Button>
@@ -126,13 +139,13 @@ export function CreateGenerateStep() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Loader2 className="size-4 animate-spin" />
-              Generating resume…
+              Rewriting resume…
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <OperationProgress
               value={progress}
-              label="Generation progress"
+              label="Rewrite progress"
               status={status}
               hint={getLiveProviderHint(llmSettings.provider, elapsedSec)}
               elapsedSec={elapsedSec}
@@ -142,29 +155,45 @@ export function CreateGenerateStep() {
         </Card>
       ) : (
         <StepChoice
-          title="Writing voice & generation"
-          description="Enhance applies AI suggestions to strengthen your resume. Light polish only fixes grammar and formatting."
+          title="Writing voice & rewrite"
+          description="Don't rewrite keeps your draft as written and opens the PDF review immediately."
         >
           <ResumeVoicePanel />
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Button
-              size="lg"
-              className="flex-1 bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90"
-              onClick={() => void runEnhance("enhance")}
-            >
-              Enhance with AI
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="flex-1"
-              onClick={() => void runEnhance("polish")}
-            >
-              Light polish only
-            </Button>
+            {preserve ? (
+              <Button
+                size="lg"
+                className="flex-1 bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90"
+                onClick={continueWithoutRewrite}
+              >
+                Continue to PDF
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="lg"
+                  className="flex-1 bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90"
+                  onClick={() => void runEnhance("enhance")}
+                >
+                  Rewrite with AI
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => void runEnhance("polish")}
+                >
+                  Light rewrite
+                </Button>
+              </>
+            )}
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Uses 1 API request</p>
+          {!preserve && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Uses 1 API request
+            </p>
+          )}
 
           {localError && (
             <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">

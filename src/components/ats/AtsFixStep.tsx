@@ -20,6 +20,12 @@ import { ResumeVoicePanel } from "@/components/generate/ResumeVoicePanel";
 import { StepChoice, StepShell } from "@/components/wizard/StepShell";
 import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
 import { useResumeStore } from "@/store/resume-store";
+import { AiContentDisclaimer } from "@/components/ui/ai-content-disclaimer";
+import {
+  BulletLockPanel,
+  collectAllRewriteLocks,
+} from "@/components/resume/BulletLockPanel";
+import { isPreserveTone } from "@/lib/writing-tone";
 
 export function AtsFixStep() {
   const [fixing, setFixing] = useState(false);
@@ -34,12 +40,16 @@ export function AtsFixStep() {
     atsResult,
     generationStyle,
     llmSettings,
+    rewriteLocks,
     prevStep,
     nextStep,
     setFixedResume,
     setFixedAtsResult,
     setFixedAtsChecking,
     clearFixedAtsResult,
+    toggleRewriteLock,
+    setRewriteLocks,
+    clearRewriteLocks,
     setError,
   } = useResumeStore();
 
@@ -87,7 +97,8 @@ export function AtsFixStep() {
         resume,
         atsResult,
         generationStyle,
-        llmSettings
+        llmSettings,
+        rewriteLocks
       );
 
       if (fixId !== fixIdRef.current) return;
@@ -176,7 +187,20 @@ export function AtsFixStep() {
             </ol>
           )}
 
+          <AiContentDisclaimer className="mb-4" />
+
           <ResumeVoicePanel />
+
+          {!isPreserveTone(generationStyle.resumeTone) && (
+            <BulletLockPanel
+              className="mt-4"
+              resume={resume}
+              locks={rewriteLocks}
+              onToggle={toggleRewriteLock}
+              onLockAll={() => setRewriteLocks(collectAllRewriteLocks(resume))}
+              onUnlockAll={clearRewriteLocks}
+            />
+          )}
 
           <Button
             size="lg"

@@ -1,19 +1,23 @@
-import { pathToFileURL } from "node:url";
-import { createRequire } from "node:module";
+import { extractText, getDocumentProxy } from "unpdf";
+
+/** Always return a plain Uint8Array — pdf.js rejects Node Buffer even though Buffer extends Uint8Array. */
+function toPlainUint8Array(input: ArrayBuffer | Uint8Array | Buffer): Uint8Array {
+  if (input instanceof ArrayBuffer) {
+    return new Uint8Array(input);
+  }
+  // Copy so the result is not a Buffer subclass
+  return new Uint8Array(input);
+}
 
 /**
- * Server-side PDF text extraction (Node). Avoids Safari/mobile pdf.js worker issues
- * by never running PDF parsing in the browser for the upload → parse path.
+ * Server-side PDF text extraction for Node / Vercel.
+ * Uses unpdf (serverless PDF.js build) — avoids browser globals like DOMMatrix
+ * that plain pdfjs-dist expects in Node.
  */
 export async function extractTextFromPdfBuffer(
   input: ArrayBuffer | Uint8Array | Buffer
 ): Promise<string> {
-  const data =
-    input instanceof Uint8Array
-      ? input
-      : input instanceof Buffer
-        ? new Uint8Array(input)
-        : new Uint8Array(input);
+  const data = toPlainUint8Array(input);
 
   if (data.byteLength === 0) {
     throw new Error("PDF file is empty");
@@ -24,41 +28,19 @@ export async function extractTextFromPdfBuffer(
     throw new Error("PDF is too large (max 12MB). Try a smaller file.");
   }
 
-  const require = createRequire(import.meta.url);
-  const workerPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  const pdf = await getDocumentProxy(data);
+  const { text, totalPages } = await extractText(pdf, { mergePages: true });
+  const merged = (typeof text === "string" ? text : "").trim();
 
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
-
-  const loadingTask = pdfjs.getDocument({
-    data,
-    useSystemFonts: true,
-    disableFontFace: true,
-  });
-
-  const pdf = await loadingTask.promise;
-  const pages: string[] = [];
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const items = Array.isArray(content.items) ? content.items : [];
-    const pageText = items
-      .map((item) =>
-        item && typeof item === "object" && "str" in item
-          ? String((item as { str: string }).str)
-          : ""
-      )
-      .join(" ");
-    pages.push(pageText);
-  }
-
-  const text = pages.join("\n\n").trim();
-  if (!text) {
+  if (!merged) {
     throw new Error(
       "Could not extract text from PDF. Try a text-based PDF (not a scanned image)."
     );
   }
 
-  return text;
+  if (totalPages === 0) {
+    throw new Error("PDF has no pages");
+  }
+
+  return merged;
 }

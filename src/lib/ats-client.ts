@@ -48,12 +48,19 @@ export async function fetchAtsFix(
   resume: Resume,
   atsResult: AtsCheckResult,
   generationStyle: GenerationStyle,
-  settings: LLMSettings
+  settings: LLMSettings,
+  rewriteLocks: string[] = []
 ): Promise<Resume> {
   const response = await fetch("/api/ats-fix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ resume, atsResult, generationStyle, settings }),
+    body: JSON.stringify({
+      resume,
+      atsResult,
+      generationStyle,
+      settings,
+      rewriteLocks,
+    }),
   });
 
   const data = await readJsonResponse<{ resume?: Resume; error?: string }>(

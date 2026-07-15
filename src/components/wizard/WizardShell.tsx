@@ -19,11 +19,25 @@ import { AtsUploadStep } from "@/components/ats/AtsUploadStep";
 import { AtsScoreStep } from "@/components/ats/AtsScoreStep";
 import { AtsFixStep } from "@/components/ats/AtsFixStep";
 import { AtsReviewStep } from "@/components/ats/AtsReviewStep";
+import { EditDocStepIndicator } from "@/components/edit/EditDocStepIndicator";
+import { EditResumeUploadStep } from "@/components/edit/EditResumeUploadStep";
+import { EditResumeToneStep } from "@/components/edit/EditResumeToneStep";
+import { EditResumeLockStep } from "@/components/edit/EditResumeLockStep";
+import { EditResumeGenerateStep } from "@/components/edit/EditResumeGenerateStep";
+import { EditResumeEditStep } from "@/components/edit/EditResumeEditStep";
+import { EditResumeReviewStep } from "@/components/edit/EditResumeReviewStep";
+import { EditCoverUploadStep } from "@/components/edit/EditCoverUploadStep";
+import { EditCoverToneStep } from "@/components/edit/EditCoverToneStep";
+import { EditCoverEditStep } from "@/components/edit/EditCoverEditStep";
+import { EditCoverReviewStep } from "@/components/edit/EditCoverReviewStep";
+import { GenerateCvStepIndicator } from "@/components/generate-cv/GenerateCvStepIndicator";
+import { GenerateCvUploadStep } from "@/components/generate-cv/GenerateCvUploadStep";
+import { GenerateCvReviewStep } from "@/components/generate-cv/GenerateCvReviewStep";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { FlowNav } from "./FlowNav";
-import { useResumeStore } from "@/store/resume-store";
+import { useResumeStore, type AppFlow } from "@/store/resume-store";
 
-function getSubtitle(flow: "landing" | "create" | "tailor" | "ats"): string {
+function getSubtitle(flow: AppFlow): string {
   if (flow === "create") {
     return "Build an ATS-friendly resume from scratch";
   }
@@ -33,7 +47,16 @@ function getSubtitle(flow: "landing" | "create" | "tailor" | "ats"): string {
   if (flow === "ats") {
     return "Check and improve your resume for ATS systems";
   }
-  return "Create, tailor, or check your resume for ATS";
+  if (flow === "edit-resume") {
+    return "Upload and edit your resume";
+  }
+  if (flow === "edit-cover") {
+    return "Upload and edit your cover letter as-is";
+  }
+  if (flow === "generate-cv") {
+    return "Generate a cover letter from your resume and job details";
+  }
+  return "Create, tailor, edit, or check your resume for ATS";
 }
 
 export function WizardShell() {
@@ -68,6 +91,15 @@ export function WizardShell() {
             {flow === "create" && <CreateStepIndicator currentStep={step} />}
             {flow === "tailor" && <StepIndicator currentStep={step} />}
             {flow === "ats" && <AtsStepIndicator currentStep={step} />}
+            {flow === "edit-resume" && (
+              <EditDocStepIndicator currentStep={step} variant="resume" />
+            )}
+            {flow === "edit-cover" && (
+              <EditDocStepIndicator currentStep={step} variant="cover" />
+            )}
+            {flow === "generate-cv" && (
+              <GenerateCvStepIndicator currentStep={step} />
+            )}
           </div>
         </div>
       )}
@@ -92,6 +124,23 @@ export function WizardShell() {
             {flow === "ats" && step === 2 && <AtsScoreStep />}
             {flow === "ats" && step === 3 && <AtsFixStep />}
             {flow === "ats" && step === 4 && <AtsReviewStep />}
+
+            {flow === "edit-resume" && step === 1 && <EditResumeUploadStep />}
+            {flow === "edit-resume" && step === 2 && <EditResumeToneStep />}
+            {flow === "edit-resume" && step === 3 && <EditResumeLockStep />}
+            {flow === "edit-resume" && step === 4 && <EditResumeGenerateStep />}
+            {flow === "edit-resume" && step === 5 && <EditResumeEditStep />}
+            {flow === "edit-resume" && step === 6 && <EditResumeReviewStep />}
+
+            {flow === "edit-cover" && step === 1 && <EditCoverUploadStep />}
+            {flow === "edit-cover" && step === 2 && <EditCoverToneStep />}
+            {flow === "edit-cover" && step === 3 && <EditCoverEditStep />}
+            {flow === "edit-cover" && step === 4 && <EditCoverReviewStep />}
+
+            {flow === "generate-cv" && step === 1 && <GenerateCvUploadStep />}
+            {flow === "generate-cv" && step === 2 && <JobDetailsForm />}
+            {flow === "generate-cv" && step === 3 && <GenerateStep />}
+            {flow === "generate-cv" && step === 4 && <GenerateCvReviewStep />}
           </Card>
         </div>
       </main>

@@ -8,7 +8,6 @@ import {
   Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,12 +21,13 @@ import {
 import { ResumePreview } from "@/components/resume/ResumePreview";
 import { ResumeInlineEditor } from "./ResumeInlineEditor";
 import { ReviewHeaderEditor } from "./ReviewHeaderEditor";
-import { CoverLetterPreview } from "./CoverLetterPreview";
+import { CoverLetterCanvas } from "./CoverLetterCanvas";
 import {
   stripCoverLetterSignature,
 } from "@/lib/resume-header";
 import { normalizeResume } from "@/lib/resume-schema";
 import { useResumeStore } from "@/store/resume-store";
+import { AiContentDisclaimer } from "@/components/ui/ai-content-disclaimer";
 
 const PdfDownloadButtons = dynamic(
   () => import("./PdfDownloadButtons"),
@@ -54,6 +54,7 @@ export function ReviewStep() {
     changes,
     jobDetails,
     setCoverLetter,
+    updateJobDetails,
     setStep,
     resetAll,
   } = useResumeStore();
@@ -86,6 +87,8 @@ export function ReviewStep() {
         </div>
       </div>
 
+      <AiContentDisclaimer compact className="mb-2" />
+
       <Tabs defaultValue="preview">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList className="h-auto flex-wrap justify-start">
@@ -109,6 +112,7 @@ export function ReviewStep() {
             coverLetter={coverLetter || null}
             company={jobDetails.company}
             role={jobDetails.role}
+            coverLetterMode="templated"
           />
         </div>
 
@@ -184,43 +188,40 @@ export function ReviewStep() {
         </TabsContent>
 
         <TabsContent value="cover" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingCover(!editingCover)}
-            >
-              <Pencil className="size-4" />
-              {editingCover ? "Done Editing" : "Edit Cover Letter"}
-            </Button>
+          <div className="flex justify-end gap-2">
+            {editingCover && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingCover(false)}
+              >
+                Done Editing
+              </Button>
+            )}
+            {!editingCover && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditingCover(true)}
+              >
+                <Pencil className="size-4" />
+                Edit Cover Letter
+              </Button>
+            )}
           </div>
-          {editingCover ? (
-            <div className="space-y-4">
-              <ReviewHeaderEditor target="tailored" />
-              <Card>
-                <CardHeader>
-                  <CardTitle>Edit Cover Letter Body</CardTitle>
-                  <CardDescription>
-                    Signature (Sincerely, {displayResume.header.name}) is added automatically
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Textarea
-                    rows={16}
-                    value={stripCoverLetterSignature(coverLetter)}
-                    onChange={(e) => setCoverLetter(e.target.value)}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-          ) : (
-            <CoverLetterPreview
-              header={displayResume.header}
-              company={jobDetails.company}
-              role={jobDetails.role}
-              body={stripCoverLetterSignature(coverLetter)}
-            />
+          {editingCover && (
+            <ReviewHeaderEditor target="tailored" />
           )}
+          <CoverLetterCanvas
+            header={displayResume.header}
+            company={jobDetails.company}
+            role={jobDetails.role}
+            body={stripCoverLetterSignature(coverLetter)}
+            editable={editingCover}
+            onCompanyChange={(company) => updateJobDetails({ company })}
+            onRoleChange={(role) => updateJobDetails({ role })}
+            onBodyChange={setCoverLetter}
+          />
         </TabsContent>
 
         {originalResume && (

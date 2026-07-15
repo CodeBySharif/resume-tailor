@@ -1,17 +1,19 @@
 "use client";
 
-import { ResumeUploadStep } from "./ResumeUploadStep";
+import { ResumeUploadStep } from "@/components/resume/ResumeUploadStep";
 import { useResumeStore } from "@/store/resume-store";
 
-export function ResumeSourceStep() {
+/** Generate cover letter step 1 — same upload UX as Tailor / ATS. */
+export function GenerateCvUploadStep() {
   const { goToLanding } = useResumeStore();
 
   return (
     <ResumeUploadStep
-      title="Tailor Resume"
+      title="Generate Cover Letter"
       description="Upload a resume PDF, then continue"
       showBack
       onBack={goToLanding}
+      allowTemplate={false}
     />
   );
 }

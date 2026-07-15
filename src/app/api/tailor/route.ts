@@ -15,6 +15,7 @@ import {
 } from "@/lib/writing-tone";
 import { normalizePrintableText } from "@/lib/text-normalize";
 import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
+import { applyRewriteLocks } from "@/lib/rewrite-locks";
 
 /** Allow longer LLM tailor runs on platforms that support route maxDuration (e.g. Vercel). */
 export const maxDuration = 120;
@@ -22,12 +23,14 @@ export const maxDuration = 120;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resume, jobDetails, generationStyle, settings } = body as {
-      resume: Resume;
-      jobDetails: JobDetails;
-      generationStyle?: Partial<GenerationStyle>;
-      settings?: Partial<LLMSettings>;
-    };
+    const { resume, jobDetails, generationStyle, settings, rewriteLocks } =
+      body as {
+        resume: Resume;
+        jobDetails: JobDetails;
+        generationStyle?: Partial<GenerationStyle>;
+        settings?: Partial<LLMSettings>;
+        rewriteLocks?: string[];
+      };
 
     if (!resume || !jobDetails) {
       return NextResponse.json(
@@ -58,14 +61,21 @@ export async function POST(request: NextRequest) {
       ...generationStyle,
     };
 
-    const prompt = buildTailorPrompt(resume, jobDetails, style);
+    const locks = Array.isArray(rewriteLocks) ? rewriteLocks : [];
+    const source = normalizeResume(resume);
+    const prompt = buildTailorPrompt(source, jobDetails, style, locks);
     const llm = await generateJSON(prompt, llmSettings);
     const parsed = JSON.parse(llm.text) as TailorResult;
 
+    const tailored = applyRewriteLocks(
+      source,
+      normalizeResume(parsed.resume ?? {}),
+      locks
+    );
+
     const result: TailorResult = {
-      resume: normalizeResume(parsed.resume ?? {}),
+      resume: tailored,
       coverLetter: normalizePrintableText(
-        // Some models return cover letter as a paragraph array
         Array.isArray(parsed.coverLetter)
           ? parsed.coverLetter
           : (parsed.coverLetter ?? "")

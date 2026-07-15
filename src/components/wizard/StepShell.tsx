@@ -38,19 +38,40 @@ interface StepChoiceProps {
   title: string;
   description?: string;
   children: ReactNode;
+  /** Tighter padding / no forced min-height (home cards). */
+  compact?: boolean;
 }
 
 /** Bordered block for user choices (modes, voices, run buttons). */
-export function StepChoice({ title, description, children }: StepChoiceProps) {
+export function StepChoice({
+  title,
+  description,
+  children,
+  compact = false,
+}: StepChoiceProps) {
   return (
-    <section className="flex h-full min-h-[280px] flex-col rounded-xl border border-border bg-muted/10 p-5 sm:min-h-[300px] sm:p-6">
-      <div className="mb-4 flex-1 space-y-1">
+    <section
+      className={
+        compact
+          ? "flex flex-col rounded-xl border border-border bg-muted/10 p-3.5"
+          : "flex h-full min-h-[280px] flex-col rounded-xl border border-border bg-muted/10 p-5 sm:min-h-[300px] sm:p-6"
+      }
+    >
+      <div className={compact ? "mb-2.5 space-y-0.5" : "mb-4 flex-1 space-y-1"}>
         <h3 className="text-sm font-semibold">{title}</h3>
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p
+            className={
+              compact
+                ? "text-xs leading-snug text-muted-foreground"
+                : "text-sm text-muted-foreground"
+            }
+          >
+            {description}
+          </p>
         )}
       </div>
-      <div className="mt-auto">{children}</div>
+      <div className={compact ? undefined : "mt-auto"}>{children}</div>
     </section>
   );
 }

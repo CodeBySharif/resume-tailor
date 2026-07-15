@@ -435,3 +435,34 @@ export function CoverLetterPDFDocument({
     </Document>
   );
 }
+
+/** Full letter as stored (uploaded PDF text / freeform) — no template wrapper. */
+export function FreeformCoverLetterPDFDocument({
+  coverLetter,
+}: {
+  coverLetter: string;
+}) {
+  const paragraphs = coverLetter
+    .split(/\n\n+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const lines = paragraphs.length > 0
+    ? paragraphs
+    : coverLetter
+        .split(/\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+  return (
+    <Document>
+      <Page size="LETTER" style={styles.page}>
+        {lines.map((para, i) => (
+          <Text key={i} style={styles.letterBody}>
+            {sanitizePdfText(para)}
+          </Text>
+        ))}
+      </Page>
+    </Document>
+  );
+}

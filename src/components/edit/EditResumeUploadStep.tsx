@@ -1,12 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileUp, FileText, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OperationProgress } from "@/components/ui/operation-progress";
-import { PdfPagePreview } from "./PdfPagePreview";
+import { PdfPagePreview } from "@/components/resume/PdfPagePreview";
 import { StepShell } from "@/components/wizard/StepShell";
-import { createTemplateResume } from "@/lib/resume-schema";
 import { useSmoothProgress } from "@/hooks/useSmoothProgress";
 import {
   formatAttemptLog,
@@ -25,34 +24,14 @@ import { readJsonResponse } from "@/lib/api-response";
 import type { Resume } from "@/lib/resume-schema";
 import { useResumeStore } from "@/store/resume-store";
 
-interface ResumeUploadStepProps {
-  title?: string;
-  description?: string;
-  showBack?: boolean;
-  onBack?: () => void;
-  clearAtsOnUpload?: boolean;
-  allowTemplate?: boolean;
-}
-
-/**
- * Upload shows a snapshot immediately. AI parsing (needed for editable structure)
- * runs when the user clicks Continue — not while "uploading" the file.
- */
-export function ResumeUploadStep({
-  title = "Choose Resume Source",
-  description = "Upload a resume PDF, then continue",
-  showBack = false,
-  onBack,
-  clearAtsOnUpload = false,
-  allowTemplate = true,
-}: ResumeUploadStepProps) {
+/** Select PDF instantly; AI parse runs on Continue. */
+export function EditResumeUploadStep() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [attemptLog, setAttemptLog] = useState<LLMAttempt[] | null>(null);
-  const [templateReady, setTemplateReady] = useState(false);
   const [parsedOk, setParsedOk] = useState(false);
 
   const {
@@ -68,40 +47,18 @@ export function ResumeUploadStep({
     resume,
     setResume,
     setOriginalResume,
-    clearAtsResult,
+    goToLanding,
     nextStep,
     llmSettings,
     setError,
   } = useResumeStore();
 
-  const hasFileOrTemplate = Boolean(selectedFile) || templateReady || parsedOk;
   const storeHasResume = Boolean(
     resume.header.name.trim() ||
       resume.summary.trim() ||
       resume.experience.length
   );
-  const canContinue =
-    hasFileOrTemplate || storeHasResume;
-
-  function handleFileSelect(file: File) {
-    setLocalError(null);
-    setError(null);
-    setAttemptLog(null);
-    setTemplateReady(false);
-    setParsedOk(false);
-    setSelectedFile(file);
-  }
-
-  function handleTemplate() {
-    if (clearAtsOnUpload) clearAtsResult();
-    const template = createTemplateResume();
-    setResume(template);
-    setOriginalResume(template);
-    setSelectedFile(null);
-    setTemplateReady(true);
-    setParsedOk(true);
-    setLocalError(null);
-  }
+  const canContinue = Boolean(selectedFile) || parsedOk || storeHasResume;
 
   async function parseSelectedFile(file: File) {
     const keyError = validatePrimaryProviderKey(llmSettings);
@@ -111,7 +68,6 @@ export function ResumeUploadStep({
       return false;
     }
 
-    if (clearAtsOnUpload) clearAtsResult();
     setParsing(true);
     setLocalError(null);
     setError(null);
@@ -143,12 +99,11 @@ export function ResumeUploadStep({
         error?: string;
         meta?: { attempts?: LLMAttempt[] };
       }>(response);
+
       if (!response.ok) {
         if (data.meta?.attempts) setAttemptLog(data.meta.attempts);
         throw new Error(data.error || "Failed to parse resume");
       }
-
-      if (data.meta?.attempts) setAttemptLog(data.meta.attempts);
       if (!data.resume) throw new Error("Failed to parse resume");
 
       setStatus("Finishing up…");
@@ -171,35 +126,30 @@ export function ResumeUploadStep({
 
   async function handleContinue() {
     if (parsing) return;
-
-    if (templateReady || parsedOk || (storeHasResume && !selectedFile)) {
+    if (parsedOk || (storeHasResume && !selectedFile)) {
       nextStep();
       return;
     }
-
     if (!selectedFile) return;
-
     const ok = await parseSelectedFile(selectedFile);
     if (ok) nextStep();
   }
 
   return (
     <StepShell
-      title={title}
-      description={description}
+      title="Edit Resume"
+      description="Select a PDF to preview, then continue to parse it into editable sections"
       actions={
         <>
-          {showBack && onBack ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onBack}
-              disabled={parsing}
-            >
-              <ChevronLeft className="size-4" />
-              Back
-            </Button>
-          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToLanding}
+            disabled={parsing}
+          >
+            <ChevronLeft className="size-4" />
+            Back
+          </Button>
           <Button
             size="sm"
             disabled={!canContinue || parsing}
@@ -230,16 +180,11 @@ export function ResumeUploadStep({
           <div className="w-full">
             <OperationProgress
               value={smoothPercent}
-              label="Parse progress"
+              label="Resume parse progress"
               status={status}
               hint={getLiveProviderHint(llmSettings.provider, elapsedSec)}
               elapsedSec={elapsedSec}
             />
-            {attemptLog && attemptLog.length > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {formatAttemptLog(attemptLog)}
-              </p>
-            )}
           </div>
         )}
 
@@ -250,7 +195,11 @@ export function ResumeUploadStep({
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleFileSelect(file);
+            if (file) {
+              setSelectedFile(file);
+              setParsedOk(false);
+              setLocalError(null);
+            }
             e.target.value = "";
           }}
         />
@@ -264,18 +213,6 @@ export function ResumeUploadStep({
           {selectedFile ? "Choose another PDF" : "Upload resume PDF"}
         </Button>
 
-        {allowTemplate && (
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={parsing}
-            onClick={handleTemplate}
-          >
-            <FileText className="size-4" />
-            Use template
-          </Button>
-        )}
-
         {parsedOk && !parsing && resume.header.name && (
           <p className="text-center text-sm text-muted-foreground">
             Ready:{" "}
@@ -284,20 +221,20 @@ export function ResumeUploadStep({
             </span>
           </p>
         )}
-      </div>
 
-      {localError && (
-        <div className="mx-auto mt-4 max-w-sm space-y-2">
-          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {localError}
-          </p>
-          {attemptLog && attemptLog.length > 0 && (
-            <p className="rounded-lg border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
-              Provider attempts: {formatAttemptLog(attemptLog)}
+        {localError && (
+          <div className="w-full space-y-2">
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {localError}
             </p>
-          )}
-        </div>
-      )}
+            {attemptLog && attemptLog.length > 0 && (
+              <p className="rounded-lg border bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
+                Provider attempts: {formatAttemptLog(attemptLog)}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </StepShell>
   );
 }

@@ -40,4 +40,18 @@ export function getAtsCheckDurationMs(provider: LLMProvider): number {
   }
 }
 
+/** Create resume / rewrite suggest calls */
+export function getSuggestDurationMs(provider: LLMProvider): number {
+  switch (provider) {
+    case "gemini":
+      return 22_000;
+    case "groq":
+      return 35_000;
+    case "openrouter":
+      return 45_000;
+    default:
+      return 45_000;
+  }
+}
+
 export const PDF_READ_DURATION_MS = 4_000;

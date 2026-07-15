@@ -11,6 +11,7 @@ import {
   formatPrecheckForPrompt,
   getAtsTodayContext,
 } from "./ats-precheck";
+import { formatRewriteLocksForPrompt } from "./rewrite-locks";
 
 const SHARED_RESUME_WRITING_RULES = `
 Metrics rules:
@@ -57,7 +58,8 @@ Return ONLY valid JSON, no markdown fences.`;
 export function buildTailorPrompt(
   resume: Resume,
   job: JobDetails,
-  style: GenerationStyle
+  style: GenerationStyle,
+  rewriteLocks: string[] = []
 ): string {
   const excludeList = job.skillsToExclude
     .split(",")
@@ -88,6 +90,7 @@ ${job.skillGaps.trim()}
 
   const resumeTone = getToneOption(style.resumeTone);
   const coverTone = getToneOption(style.coverLetterTone);
+  const preserveResume = style.resumeTone === "preserve";
   const metricsModeNote =
     style.resumeTone === "metrics" || style.coverLetterTone === "metrics"
       ? `
@@ -97,6 +100,22 @@ Metrics-driven mode guidance:
 - Keep numbers modest and plausible for the role; misleading metrics are worse than no metrics
 `
       : "";
+
+  const resumeInstructions = preserveResume
+    ? `Resume instructions (DON'T REWRITE mode):
+1. Return the resume nearly identical to the input — preserve wording of summary, bullets, and skills
+2. Allowed minimal edits only: obvious typos, consistent date formatting, and lightly surfacing JD keywords that ALREADY appear in the resume
+3. Do NOT paraphrase, reorder for style, invent metrics, or change voice
+4. Keep the same structure and all id fields unchanged
+5. Do NOT fabricate experience, companies, credentials, or technologies
+6. The changes array may be empty or list only the tiny edits you made`
+    : `Resume instructions:
+1. Rewrite the professional summary to align with the role using only truthful experience
+2. Reorder and reword experience bullets to highlight relevant skills and achievements the candidate actually has
+3. Adjust skills list to emphasize job-relevant skills the candidate already has — do NOT add skills from the job description unless they clearly appear in experience, projects, or the existing skills list
+4. Keep the same structure and all id fields unchanged
+5. Do NOT fabricate experience, companies, credentials, or technologies
+6. If the job asks for skills the candidate lacks, emphasize transferable strengths instead of claiming those skills`;
 
   return `You are an expert resume writer and career coach. Tailor the following resume for the target job. Optimize for ATS (Applicant Tracking Systems) while keeping all claims truthful.
 
@@ -113,15 +132,11 @@ ${job.jobDescription}
 ${excludeSection}${excitesSection}${gapsSection}
 Current Resume (JSON):
 ${JSON.stringify(resume, null, 2)}
+${formatRewriteLocksForPrompt(resume, rewriteLocks)}
+${resumeInstructions}
 
-Instructions:
-1. Rewrite the professional summary to align with the role using only truthful experience
-2. Reorder and reword experience bullets to highlight relevant skills and achievements the candidate actually has
-3. Adjust skills list to emphasize job-relevant skills the candidate already has — do NOT add skills from the job description unless they clearly appear in experience, projects, or the existing skills list
-4. Keep the same structure and all id fields unchanged
-5. Do NOT fabricate experience, companies, credentials, or technologies
-6. If the job asks for skills the candidate lacks, emphasize transferable strengths instead of claiming those skills
-7. Write a professional cover letter body (3-4 paragraphs) — do NOT include sender address, date, greeting, or sign-off (the app adds those)
+Cover letter instructions:
+7. Write a cover letter body (3-4 paragraphs) — do NOT include sender address, date, greeting, or sign-off (the app adds those)
 8. Cover letter must not mention any excluded skills/topics listed above
 9. If "what excites the candidate" notes are provided, include genuine enthusiasm in the cover letter
 10. If skill gap notes are provided, address gaps honestly with transferable strengths — never fabricate qualifications
@@ -129,10 +144,10 @@ Instructions:
 ATS-friendly output requirements (apply to the tailored resume):
 - Use standard section headings and a parseable single-column layout (no tables, columns, or graphics)
 - Mirror important keywords from the job description where the candidate genuinely has that experience
-- Lead experience bullets with strong action verbs; include metrics where truthful
+- ${preserveResume ? "In don't-rewrite mode, skip stylistic ATS rewrites; only apply keyword surfacing when already supported" : "Lead experience bullets with strong action verbs; include metrics where truthful"}
 - Keep contact info complete and skills list focused (roughly 10–25 relevant skills)
 - Ensure consistent date formatting and correct grammar/tense throughout
-${SHARED_RESUME_WRITING_RULES}
+${preserveResume ? "" : SHARED_RESUME_WRITING_RULES}
 
 Return JSON with this exact structure:
 {
@@ -143,7 +158,53 @@ Return JSON with this exact structure:
   ]
 }
 
-Include at least 3 meaningful changes in the changes array. Return ONLY valid JSON.`;
+${preserveResume ? "If the resume was left unchanged, return an empty changes array." : "Include at least 3 meaningful changes in the changes array."} Return ONLY valid JSON.`;
+}
+
+/** Rewrite a resume in a chosen voice with no job description (edit-resume flow). */
+export function buildRewriteResumePrompt(
+  resume: Resume,
+  style: GenerationStyle,
+  rewriteLocks: string[] = []
+): string {
+  const tone = getToneOption(style.resumeTone);
+  return `You are an expert resume editor. Rewrite the resume using the selected voice while staying truthful.
+
+Voice (${tone.label}): ${tone.resumePrompt}
+
+${SHARED_RESUME_WRITING_RULES}
+
+Current Resume (JSON):
+${JSON.stringify(resume, null, 2)}
+${formatRewriteLocksForPrompt(resume, rewriteLocks)}
+Rules:
+- Keep the same structure and all id fields unchanged
+- Do NOT fabricate experience, companies, credentials, or technologies
+- Do not add a job-specific tailoring angle — improve clarity and voice only
+- Preserve every LOCKED bullet/summary exactly as provided
+- Return ONLY JSON: { "resume": <resume matching schema> }`;
+}
+
+/** Rewrite a full cover letter / CV letter in a chosen voice (edit-cover freeform). */
+export function buildRewriteCoverPrompt(
+  coverLetter: string,
+  style: GenerationStyle
+): string {
+  const tone = getToneOption(style.coverLetterTone);
+  return `You are an expert cover letter editor. Rewrite the following letter using the selected voice.
+
+Voice (${tone.label}): ${tone.coverLetterPrompt}
+
+Current letter (full text — may already include header, greeting, and signature):
+---
+${coverLetter}
+---
+
+Rules:
+- Return the COMPLETE letter as plain text (not JSON object with fields)
+- Preserve the candidate's facts; do not invent employers, roles, or skills
+- Keep a natural letter structure (you may keep or lightly refresh greeting and sign-off)
+- Return ONLY JSON: { "coverLetter": "<full rewritten letter text>" }`;
 }
 
 export function buildAtsCheckPrompt(resume: Resume, job: JobDetails): string {
@@ -244,7 +305,8 @@ Return ONLY valid JSON, no markdown fences.`;
 export function buildAtsFixPrompt(
   resume: Resume,
   atsResult: AtsCheckResult,
-  style: GenerationStyle
+  style: GenerationStyle,
+  rewriteLocks: string[] = []
 ): string {
   const failingCategories = atsResult.categories.filter(
     (c) => c.status === "fail" || c.status === "warning"
@@ -263,7 +325,7 @@ Today's date (ground truth): ${todayLabel} (${todayYearMonth})
 
 Current Resume (JSON):
 ${JSON.stringify(resume, null, 2)}
-
+${formatRewriteLocksForPrompt(resume, rewriteLocks)}
 ATS Analysis Summary:
 - Overall score: ${atsResult.overallScore}/100 (${atsResult.grade})
 - Top priorities: ${atsResult.topPriorities.map((p) => `\n  - ${p}`).join("")}
@@ -286,6 +348,7 @@ Instructions:
 5. Use standard ATS-parseable layout: single column, standard headings, no tables or graphics
 6. Strengthen skills presentation and professional summary without inventing skills
 7. Preserve valid employment dates; only change dates if they are clearly after ${todayYearMonth} or malformed
+8. Preserve every LOCKED bullet/summary exactly as provided — improve only unlocked content
 ${SHARED_RESUME_WRITING_RULES}
 
 Return JSON with this exact structure:

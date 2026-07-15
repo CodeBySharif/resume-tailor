@@ -1,4 +1,5 @@
 export type WritingTone =
+  | "preserve"
   | "professional"
   | "metrics"
   | "concise"
@@ -17,6 +18,20 @@ export interface WritingToneOption {
 }
 
 export const WRITING_TONES: WritingToneOption[] = [
+  {
+    id: "preserve",
+    label: "Don't rewrite",
+    description:
+      "Keep original wording. Only light structure / keyword alignment when needed.",
+    resumeExample:
+      "Developed and maintained internal web applications using React and Node.js, collaborating with cross-functional teams to deliver features on schedule.",
+    coverLetterExample:
+      "I am applying for the Software Developer role at Acme Corp. My experience building web applications matches the skills listed in the job description.",
+    resumePrompt:
+      "PRESERVE the candidate's original wording as much as possible. Do not paraphrase for style. Only make minimal edits for ATS keyword alignment when clearly supported by existing content, or fix obvious typos. Prefer leaving bullets and summary unchanged.",
+    coverLetterPrompt:
+      "Write a short, plain, factual cover letter. Avoid stylistic flourish. Stick to clear fit statements with little polish — nearly draft-quality, not a rewrite for voice.",
+  },
   {
     id: "professional",
     label: "Professional",
@@ -101,6 +116,9 @@ export const WRITING_TONES: WritingToneOption[] = [
 
 export const DEFAULT_RESUME_TONE: WritingTone = "professional";
 export const DEFAULT_COVER_LETTER_TONE: WritingTone = "warm";
+/** Default for edit flows — skip AI rewrite unless the user picks a voice. */
+export const DEFAULT_EDIT_RESUME_TONE: WritingTone = "preserve";
+export const DEFAULT_EDIT_COVER_TONE: WritingTone = "preserve";
 
 export interface GenerationStyle {
   resumeTone: WritingTone;
@@ -114,6 +132,10 @@ export const DEFAULT_GENERATION_STYLE: GenerationStyle = {
 
 export function getToneOption(id: WritingTone): WritingToneOption {
   return WRITING_TONES.find((t) => t.id === id) ?? WRITING_TONES[0];
+}
+
+export function isPreserveTone(id: WritingTone): boolean {
+  return id === "preserve";
 }
 
 export function getToneLabel(id: WritingTone): string {

@@ -11,6 +11,7 @@ import { ResumeInlineEditor } from "@/components/review/ResumeInlineEditor";
 import { ReviewHeaderEditor } from "@/components/review/ReviewHeaderEditor";
 import { normalizeResume } from "@/lib/resume-schema";
 import { useResumeStore } from "@/store/resume-store";
+import { AiContentDisclaimer } from "@/components/ui/ai-content-disclaimer";
 
 const PdfDownloadButtons = dynamic(
   () => import("@/components/review/PdfDownloadButtons"),
@@ -86,6 +87,7 @@ export function AtsReviewStep() {
 
   return (
     <div className="space-y-6">
+      <AiContentDisclaimer compact />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">Your improved resume</h2>

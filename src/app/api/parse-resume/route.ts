@@ -52,8 +52,8 @@ async function getTextAndSettings(request: NextRequest): Promise<{
       throw new Error("Please upload a PDF file");
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const text = await extractTextFromPdfBuffer(buffer);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const text = await extractTextFromPdfBuffer(bytes);
     return { text, settings };
   }
 
@@ -70,8 +70,8 @@ async function getTextAndSettings(request: NextRequest): Promise<{
 
   if (typeof pdfBase64 === "string" && pdfBase64.trim()) {
     const base64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "");
-    const buffer = Buffer.from(base64, "base64");
-    const extracted = await extractTextFromPdfBuffer(buffer);
+    const bytes = new Uint8Array(Buffer.from(base64, "base64"));
+    const extracted = await extractTextFromPdfBuffer(bytes);
     return { text: extracted, settings: settings ?? {} };
   }
 

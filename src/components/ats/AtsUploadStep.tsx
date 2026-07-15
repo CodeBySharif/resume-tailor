@@ -9,7 +9,7 @@ export function AtsUploadStep() {
   return (
     <ResumeUploadStep
       title="Upload Resume"
-      description="Upload your PDF to check ATS-friendliness"
+      description="Upload a resume PDF, then continue"
       showBack
       onBack={goToLanding}
       clearAtsOnUpload

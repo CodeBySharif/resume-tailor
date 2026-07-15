@@ -12,6 +12,8 @@ import {
   type ResumeChange,
 } from "@/lib/resume-schema";
 import {
+  DEFAULT_EDIT_COVER_TONE,
+  DEFAULT_EDIT_RESUME_TONE,
   DEFAULT_GENERATION_STYLE,
   type GenerationStyle,
 } from "@/lib/writing-tone";
@@ -20,8 +22,16 @@ import type { ResumeSuggestResult } from "@/lib/resume-suggest-types";
 import { resumeHasParseArtifacts } from "@/lib/resume-parse-sanitize";
 import { normalizePrintableText } from "@/lib/text-normalize";
 
-export type AppFlow = "landing" | "create" | "tailor" | "ats";
-export type WizardStep = 1 | 2 | 3 | 4 | 5;
+export type AppFlow =
+  | "landing"
+  | "create"
+  | "tailor"
+  | "ats"
+  | "edit-resume"
+  | "edit-cover"
+  | "generate-cv";
+export type WizardStep = 1 | 2 | 3 | 4 | 5 | 6;
+export type CoverLetterMode = "templated" | "freeform";
 
 function finalizeResume(resume: Resume): Resume {
   const normalized = normalizeResume(resume);
@@ -35,6 +45,9 @@ function maxStepForFlow(flow: AppFlow): number {
   if (flow === "create") return 4;
   if (flow === "ats") return 4;
   if (flow === "tailor") return 5;
+  if (flow === "edit-resume") return 6;
+  if (flow === "edit-cover") return 4;
+  if (flow === "generate-cv") return 4;
   return 1;
 }
 
@@ -46,6 +59,8 @@ function clearFlowState() {
     fixedResume: null as Resume | null,
     createdResume: null as Resume | null,
     coverLetter: "",
+    coverLetterMode: "templated" as CoverLetterMode,
+    rewriteLocks: [] as string[],
     changes: [] as ResumeChange[],
     jobDetails: createEmptyJobDetails(),
     generationStyle: DEFAULT_GENERATION_STYLE,
@@ -71,6 +86,9 @@ interface ResumeStore {
   fixedResume: Resume | null;
   createdResume: Resume | null;
   coverLetter: string;
+  coverLetterMode: CoverLetterMode;
+  /** Locked summary / bullets that AI must not rewrite. */
+  rewriteLocks: string[];
   changes: ResumeChange[];
   jobDetails: JobDetails;
   generationStyle: GenerationStyle;
@@ -91,6 +109,9 @@ interface ResumeStore {
   startCreateFlow: () => void;
   startTailorFlow: () => void;
   startAtsFlow: () => void;
+  startEditResumeFlow: () => void;
+  startEditCoverFlow: () => void;
+  startGenerateCvFlow: () => void;
   goToLanding: () => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -104,6 +125,10 @@ interface ResumeStore {
   setCreatedResume: (resume: Resume) => void;
   updateCreatedResume: (updater: (resume: Resume) => Resume) => void;
   setCoverLetter: (letter: string) => void;
+  setCoverLetterMode: (mode: CoverLetterMode) => void;
+  setRewriteLocks: (locks: string[]) => void;
+  toggleRewriteLock: (key: string) => void;
+  clearRewriteLocks: () => void;
   setChanges: (changes: ResumeChange[]) => void;
   setJobDetails: (details: JobDetails) => void;
   updateJobDetails: (partial: Partial<JobDetails>) => void;
@@ -165,6 +190,8 @@ export const useResumeStore = create<ResumeStore>((set) => ({
   fixedResume: null,
   createdResume: null,
   coverLetter: "",
+  coverLetterMode: "templated",
+  rewriteLocks: [],
   changes: [],
   jobDetails: createEmptyJobDetails(),
   generationStyle: DEFAULT_GENERATION_STYLE,
@@ -201,6 +228,38 @@ export const useResumeStore = create<ResumeStore>((set) => ({
       step: 1,
       ...clearFlowState(),
     }),
+  startEditResumeFlow: () =>
+    set({
+      flow: "edit-resume",
+      step: 1,
+      ...clearFlowState(),
+      generationStyle: {
+        ...DEFAULT_GENERATION_STYLE,
+        resumeTone: DEFAULT_EDIT_RESUME_TONE,
+      },
+    }),
+  startEditCoverFlow: () =>
+    set({
+      flow: "edit-cover",
+      step: 1,
+      ...clearFlowState(),
+      coverLetterMode: "freeform",
+      generationStyle: {
+        ...DEFAULT_GENERATION_STYLE,
+        coverLetterTone: DEFAULT_EDIT_COVER_TONE,
+      },
+    }),
+  startGenerateCvFlow: () =>
+    set({
+      flow: "generate-cv",
+      step: 1,
+      ...clearFlowState(),
+      coverLetterMode: "templated",
+      generationStyle: {
+        ...DEFAULT_GENERATION_STYLE,
+        resumeTone: DEFAULT_EDIT_RESUME_TONE,
+      },
+    }),
   goToLanding: () =>
     set({
       flow: "landing",
@@ -236,6 +295,15 @@ export const useResumeStore = create<ResumeStore>((set) => ({
     })),
   setCoverLetter: (letter) =>
     set({ coverLetter: normalizePrintableText(letter) }),
+  setCoverLetterMode: (mode) => set({ coverLetterMode: mode }),
+  setRewriteLocks: (locks) => set({ rewriteLocks: [...new Set(locks)] }),
+  toggleRewriteLock: (key) =>
+    set((s) => ({
+      rewriteLocks: s.rewriteLocks.includes(key)
+        ? s.rewriteLocks.filter((k) => k !== key)
+        : [...s.rewriteLocks, key],
+    })),
+  clearRewriteLocks: () => set({ rewriteLocks: [] }),
   setChanges: (changes) => set({ changes }),
   setJobDetails: (details) =>
     set({ jobDetails: { ...createEmptyJobDetails(), ...details } }),
@@ -276,6 +344,8 @@ export const useResumeStore = create<ResumeStore>((set) => ({
       fixedResume: null,
       createdResume: null,
       coverLetter: "",
+      coverLetterMode: "templated",
+      rewriteLocks: [],
       changes: [],
       error: null,
       atsResult: null,
