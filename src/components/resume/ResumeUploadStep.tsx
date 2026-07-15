@@ -29,6 +29,8 @@ import {
   hasConfiguredApiKey,
   validatePrimaryProviderKey,
 } from "@/lib/llm/validate-settings";
+import { readJsonResponse } from "@/lib/api-response";
+import type { Resume } from "@/lib/resume-schema";
 import { useResumeStore } from "@/store/resume-store";
 
 interface ResumeUploadStepProps {
@@ -112,13 +114,21 @@ export function ResumeUploadStep({
         body: JSON.stringify({ text, settings: llmSettings }),
       });
 
-      const data = await response.json();
+      const data = await readJsonResponse<{
+        resume?: Resume;
+        error?: string;
+        meta?: { attempts?: LLMAttempt[] };
+      }>(response);
       if (!response.ok) {
         if (data.meta?.attempts) setAttemptLog(data.meta.attempts);
         throw new Error(data.error || "Failed to parse resume");
       }
 
       if (data.meta?.attempts) setAttemptLog(data.meta.attempts);
+
+      if (!data.resume) {
+        throw new Error("Failed to parse resume");
+      }
 
       setStatus("Finishing up…");
       await complete();

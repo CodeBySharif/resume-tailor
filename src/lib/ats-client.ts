@@ -1,3 +1,4 @@
+import { readJsonResponse } from "@/lib/api-response";
 import type { AtsCheckResult } from "@/lib/ats-types";
 import type { JobDetails, LLMSettings, Resume } from "@/lib/resume-schema";
 import type { GenerationStyle } from "@/lib/writing-tone";
@@ -13,12 +14,14 @@ export async function fetchAtsCheck(
     body: JSON.stringify({ resume, jobDetails, settings }),
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<AtsCheckResult & { error?: string }>(
+    response
+  );
   if (!response.ok) {
     throw new Error(data.error || "ATS check failed");
   }
 
-  return data as AtsCheckResult;
+  return data;
 }
 
 export async function fetchGeneralAtsCheck(
@@ -31,12 +34,14 @@ export async function fetchGeneralAtsCheck(
     body: JSON.stringify({ resume, settings }),
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<AtsCheckResult & { error?: string }>(
+    response
+  );
   if (!response.ok) {
     throw new Error(data.error || "ATS check failed");
   }
 
-  return data as AtsCheckResult;
+  return data;
 }
 
 export async function fetchAtsFix(
@@ -51,10 +56,16 @@ export async function fetchAtsFix(
     body: JSON.stringify({ resume, atsResult, generationStyle, settings }),
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<{ resume?: Resume; error?: string }>(
+    response
+  );
   if (!response.ok) {
     throw new Error(data.error || "Failed to improve resume");
   }
 
-  return data.resume as Resume;
+  if (!data.resume) {
+    throw new Error("Failed to improve resume");
+  }
+
+  return data.resume;
 }

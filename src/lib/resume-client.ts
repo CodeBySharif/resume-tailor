@@ -1,3 +1,4 @@
+import { readJsonResponse } from "@/lib/api-response";
 import type { ResumeSuggestResult } from "@/lib/resume-suggest-types";
 import type { LLMSettings, Resume } from "@/lib/resume-schema";
 import type { GenerationStyle } from "@/lib/writing-tone";
@@ -13,12 +14,14 @@ export async function fetchResumeSuggest(
     body: JSON.stringify({ resume, settings }),
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<
+    ResumeSuggestResult & { error?: string }
+  >(response);
   if (!response.ok) {
     throw new Error(data.error || "Failed to get suggestions");
   }
 
-  return data as ResumeSuggestResult;
+  return data;
 }
 
 export async function fetchResumeEnhance(
@@ -34,10 +37,16 @@ export async function fetchResumeEnhance(
     body: JSON.stringify({ resume, suggestions, generationStyle, mode, settings }),
   });
 
-  const data = await response.json();
+  const data = await readJsonResponse<{ resume?: Resume; error?: string }>(
+    response
+  );
   if (!response.ok) {
     throw new Error(data.error || "Failed to enhance resume");
   }
 
-  return data.resume as Resume;
+  if (!data.resume) {
+    throw new Error("Failed to enhance resume");
+  }
+
+  return data.resume;
 }

@@ -30,6 +30,8 @@ import { getTailorDurationMs } from "@/lib/llm/progress-estimates";
 import type { LLMAttempt } from "@/lib/llm/types";
 import { getToneLabel } from "@/lib/writing-tone";
 import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
+import { readJsonResponse } from "@/lib/api-response";
+import type { Resume, ResumeChange } from "@/lib/resume-schema";
 import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
 import { useResumeStore } from "@/store/resume-store";
 
@@ -139,7 +141,13 @@ export function GenerateStep() {
 
       if (genId !== genIdRef.current) return;
 
-      const data = await response.json();
+      const data = await readJsonResponse<{
+        resume?: Resume;
+        coverLetter?: string;
+        changes?: ResumeChange[];
+        error?: string;
+        meta?: { provider?: string; attempts?: LLMAttempt[] };
+      }>(response);
       if (!response.ok) {
         if (data.meta?.attempts) setAttemptLog(data.meta.attempts);
         throw new Error(data.error || "Generation failed");
@@ -154,8 +162,12 @@ export function GenerateStep() {
       if (data.meta?.provider) setProviderUsed(data.meta.provider);
       if (data.meta?.attempts) setAttemptLog(data.meta.attempts);
 
+      if (!data.resume) {
+        throw new Error("Generation failed: missing tailored resume");
+      }
+
       setTailoredResume(data.resume);
-      setCoverLetter(data.coverLetter);
+      setCoverLetter(data.coverLetter ?? "");
       setChanges(data.changes ?? []);
       setGenerating(false);
       setLoading(false);

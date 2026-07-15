@@ -45,9 +45,9 @@ export function WizardShell() {
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="border-b border-slate-700 bg-primary text-primary-foreground">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-5">
-          <div className="min-w-0 flex-1">
+      <header className="relative border-b border-slate-700 bg-primary text-primary-foreground">
+        <div className="mx-auto flex max-w-6xl items-start justify-between gap-4 px-4 py-5">
+          <div className="relative min-w-0 flex-1">
             <h1 className="text-xl font-semibold tracking-tight">
               Resume Tailor
             </h1>
@@ -56,7 +56,9 @@ export function WizardShell() {
             </p>
             <FlowNav />
           </div>
-          <SettingsDialog />
+          <div className="shrink-0 pt-0.5">
+            <SettingsDialog />
+          </div>
         </div>
       </header>
 

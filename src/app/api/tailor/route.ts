@@ -16,6 +16,9 @@ import {
 import { normalizePrintableText } from "@/lib/text-normalize";
 import { validatePrimaryProviderKey } from "@/lib/llm/validate-settings";
 
+/** Allow longer LLM tailor runs on platforms that support route maxDuration (e.g. Vercel). */
+export const maxDuration = 120;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
