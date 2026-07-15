@@ -3,7 +3,36 @@
  * LLMs often emit &#8209; (non-breaking hyphen), smart quotes, etc. which
  * render as "&" or missing glyphs in Helvetica via @react-pdf/renderer.
  */
-export function decodeHtmlEntities(text: string): string {
+
+/** Coerce LLM/JSON values to a plain string before calling string methods. */
+export function coerceToText(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => coerceToText(item))
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.text === "string") return obj.text;
+    if (typeof obj.content === "string") return obj.content;
+    if (typeof obj.value === "string") return obj.value;
+    if (typeof obj.str === "string") return obj.str;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+  return String(value);
+}
+
+export function decodeHtmlEntities(text: unknown): string {
   const named: Record<string, string> = {
     amp: "&",
     lt: "<",
@@ -17,7 +46,9 @@ export function decodeHtmlEntities(text: string): string {
     hellip: "...",
   };
 
-  let result = text;
+  let result = coerceToText(text);
+  if (!result) return "";
+
   result = result.replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
     String.fromCodePoint(parseInt(hex, 16))
   );
@@ -31,10 +62,11 @@ export function decodeHtmlEntities(text: string): string {
   return result;
 }
 
-export function normalizePrintableText(text: string): string {
-  if (!text) return "";
+export function normalizePrintableText(text: unknown): string {
+  const raw = coerceToText(text);
+  if (!raw) return "";
 
-  let result = decodeHtmlEntities(text);
+  let result = decodeHtmlEntities(raw);
 
   result = result
     .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]/g, "-")

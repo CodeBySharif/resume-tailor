@@ -40,11 +40,21 @@ const MONTH_NAME_TO_NUM: Record<string, string> = {
   december: "12",
 };
 
-export function formatMonthYear(value: string): string {
-  if (!value) return "";
-  if (value.toLowerCase() === "present") return "Present";
+function asDateString(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return "";
+}
 
-  const match = value.match(/^(\d{4})-(\d{2})$/);
+export function formatMonthYear(value: unknown): string {
+  const text = asDateString(value);
+  if (!text) return "";
+  if (text.toLowerCase() === "present") return "Present";
+
+  const match = text.match(/^(\d{4})-(\d{2})$/);
   if (match) {
     const month = parseInt(match[2], 10);
     if (month >= 1 && month <= 12) {
@@ -52,10 +62,10 @@ export function formatMonthYear(value: string): string {
     }
   }
 
-  return value;
+  return text;
 }
 
-export function formatDateRange(start: string, end: string): string {
+export function formatDateRange(start: unknown, end: unknown): string {
   const startFmt = formatMonthYear(start);
   const endFmt = formatMonthYear(end);
   if (!startFmt && !endFmt) return "";
@@ -64,8 +74,8 @@ export function formatDateRange(start: string, end: string): string {
   return `${startFmt} – ${endFmt}`;
 }
 
-export function parseToMonthYear(value: string): string {
-  const v = value.trim();
+export function parseToMonthYear(value: unknown): string {
+  const v = asDateString(value).trim();
   if (!v) return "";
   if (v.toLowerCase() === "present") return "Present";
 
@@ -96,15 +106,16 @@ export function parseToMonthYear(value: string): string {
   return v;
 }
 
-export function toMonthInputValue(value: string): string {
-  if (!value || value.toLowerCase() === "present") return "";
-  const parsed = parseToMonthYear(value);
+export function toMonthInputValue(value: unknown): string {
+  const text = asDateString(value);
+  if (!text || text.toLowerCase() === "present") return "";
+  const parsed = parseToMonthYear(text);
   if (/^\d{4}-\d{2}$/.test(parsed)) return parsed;
   return "";
 }
 
-export function isPresentDate(value: string): boolean {
-  return value.toLowerCase() === "present";
+export function isPresentDate(value: unknown): boolean {
+  return asDateString(value).toLowerCase() === "present";
 }
 
 export function monthYearToDate(value: string): Date | undefined {

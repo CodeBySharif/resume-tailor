@@ -63,13 +63,19 @@ export async function POST(request: NextRequest) {
     const parsed = JSON.parse(llm.text) as TailorResult;
 
     const result: TailorResult = {
-      resume: normalizeResume(parsed.resume),
-      coverLetter: normalizePrintableText(parsed.coverLetter ?? ""),
+      resume: normalizeResume(parsed.resume ?? {}),
+      coverLetter: normalizePrintableText(
+        // Some models return cover letter as a paragraph array
+        Array.isArray(parsed.coverLetter)
+          ? parsed.coverLetter
+          : (parsed.coverLetter ?? "")
+      ),
       changes: Array.isArray(parsed.changes)
         ? parsed.changes.map((change) => ({
-            ...change,
-            before: normalizePrintableText(change.before ?? ""),
-            after: normalizePrintableText(change.after ?? ""),
+            section: String(change?.section ?? ""),
+            field: String(change?.field ?? ""),
+            before: normalizePrintableText(change?.before ?? ""),
+            after: normalizePrintableText(change?.after ?? ""),
           }))
         : [],
     };

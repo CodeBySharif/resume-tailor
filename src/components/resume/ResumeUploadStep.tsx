@@ -13,7 +13,6 @@ import {
 import { OperationProgress } from "@/components/ui/operation-progress";
 import { PdfPagePreview } from "./PdfPagePreview";
 import { StepShell } from "@/components/wizard/StepShell";
-import { extractTextFromPdf } from "@/lib/pdf-parse";
 import { createTemplateResume } from "@/lib/resume-schema";
 import { useSmoothProgress } from "@/hooks/useSmoothProgress";
 import {
@@ -90,7 +89,7 @@ export function ResumeUploadStep({
     setUploading(true);
     setSelectedFile(file);
     reset();
-    setStatus("Reading PDF…");
+    setStatus("Uploading PDF…");
     startCreep(0, 22, PDF_READ_DURATION_MS);
 
     const start = Date.now();
@@ -99,19 +98,17 @@ export function ResumeUploadStep({
     }, 1000);
 
     try {
-      const text = await extractTextFromPdf(file);
+      // Parse PDF on the server — avoids Safari/mobile pdf.js crashes.
+      const form = new FormData();
+      form.append("file", file);
+      form.append("settings", JSON.stringify(llmSettings));
 
-      if (!text.trim()) {
-        throw new Error("Could not extract text from PDF. Try a text-based PDF.");
-      }
-
-      setStatus("Analyzing with AI…");
-      startCreep(22, 90, getParseDurationMs(llmSettings.provider));
+      setStatus("Reading PDF & analyzing with AI…");
+      startCreep(18, 90, getParseDurationMs(llmSettings.provider));
 
       const response = await fetch("/api/parse-resume", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, settings: llmSettings }),
+        body: form,
       });
 
       const data = await readJsonResponse<{

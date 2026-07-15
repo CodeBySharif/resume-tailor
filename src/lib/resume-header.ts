@@ -29,8 +29,9 @@ export function getCoverLetterSenderLines(header: ResumeHeader): string[] {
   ) as string[];
 }
 
-export function stripCoverLetterSignature(text: string): string {
-  return text
+export function stripCoverLetterSignature(text: unknown): string {
+  const raw = typeof text === "string" ? text : text == null ? "" : String(text);
+  return raw
     .replace(/\n*(?:Sincerely|Best regards|Kind regards|Regards),?\s*\n*[\s\S]*$/i, "")
     .replace(/^Dear\s+.+?,?\s*\n+/i, "")
     .trim();
