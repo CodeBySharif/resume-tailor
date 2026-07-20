@@ -77,6 +77,16 @@ function clearFlowState() {
   };
 }
 
+/** Seed active resume from session master (master is not cleared by clearFlowState). */
+function seedFromMaster(masterResume: Resume | null) {
+  if (!masterResume) return {};
+  const copy = finalizeResume(masterResume);
+  return {
+    resume: copy,
+    originalResume: copy,
+  };
+}
+
 interface ResumeStore {
   flow: AppFlow;
   step: WizardStep;
@@ -103,6 +113,9 @@ interface ResumeStore {
   resumeSuggestions: ResumeSuggestResult | null;
   suggestLoading: boolean;
   suggestError: string | null;
+  /** Session-scoped master resume reused across flows. */
+  masterResume: Resume | null;
+  masterResumeFile: File | null;
 
   setFlow: (flow: AppFlow) => void;
   setStep: (step: WizardStep) => void;
@@ -149,6 +162,8 @@ interface ResumeStore {
   setResumeSuggestions: (result: ResumeSuggestResult | null) => void;
   setSuggestLoading: (loading: boolean) => void;
   setSuggestError: (error: string | null) => void;
+  setMasterResume: (resume: Resume, file?: File | null) => void;
+  clearMasterResume: () => void;
   resetGeneration: () => void;
   resetAll: () => void;
 }
@@ -206,6 +221,8 @@ export const useResumeStore = create<ResumeStore>((set) => ({
   resumeSuggestions: null,
   suggestLoading: false,
   suggestError: null,
+  masterResume: null,
+  masterResumeFile: null,
 
   setFlow: (flow) => set({ flow }),
   setStep: (step) => set({ step }),
@@ -217,27 +234,30 @@ export const useResumeStore = create<ResumeStore>((set) => ({
       resume: createAtsScaffoldResume(),
     }),
   startTailorFlow: () =>
-    set({
+    set((s) => ({
       flow: "tailor",
       step: 1,
       ...clearFlowState(),
-    }),
+      ...seedFromMaster(s.masterResume),
+    })),
   startAtsFlow: () =>
-    set({
+    set((s) => ({
       flow: "ats",
       step: 1,
       ...clearFlowState(),
-    }),
+      ...seedFromMaster(s.masterResume),
+    })),
   startEditResumeFlow: () =>
-    set({
+    set((s) => ({
       flow: "edit-resume",
       step: 1,
       ...clearFlowState(),
+      ...seedFromMaster(s.masterResume),
       generationStyle: {
         ...DEFAULT_GENERATION_STYLE,
         resumeTone: DEFAULT_EDIT_RESUME_TONE,
       },
-    }),
+    })),
   startEditCoverFlow: () =>
     set({
       flow: "edit-cover",
@@ -250,16 +270,17 @@ export const useResumeStore = create<ResumeStore>((set) => ({
       },
     }),
   startGenerateCvFlow: () =>
-    set({
+    set((s) => ({
       flow: "generate-cv",
       step: 1,
       ...clearFlowState(),
+      ...seedFromMaster(s.masterResume),
       coverLetterMode: "templated",
       generationStyle: {
         ...DEFAULT_GENERATION_STYLE,
         resumeTone: DEFAULT_EDIT_RESUME_TONE,
       },
-    }),
+    })),
   goToLanding: () =>
     set({
       flow: "landing",
@@ -338,6 +359,16 @@ export const useResumeStore = create<ResumeStore>((set) => ({
     set({ resumeSuggestions: result, suggestError: null }),
   setSuggestLoading: (loading) => set({ suggestLoading: loading }),
   setSuggestError: (error) => set({ suggestError: error }),
+  setMasterResume: (resume, file = null) =>
+    set({
+      masterResume: finalizeResume(resume),
+      masterResumeFile: file ?? null,
+    }),
+  clearMasterResume: () =>
+    set({
+      masterResume: null,
+      masterResumeFile: null,
+    }),
   resetGeneration: () =>
     set({
       tailoredResume: null,
@@ -362,5 +393,6 @@ export const useResumeStore = create<ResumeStore>((set) => ({
       flow: "landing",
       step: 1,
       ...clearFlowState(),
+      // Keep master resume for the browser session
     }),
 }));

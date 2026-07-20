@@ -33,8 +33,9 @@ import { EditCoverReviewStep } from "@/components/edit/EditCoverReviewStep";
 import { GenerateCvStepIndicator } from "@/components/generate-cv/GenerateCvStepIndicator";
 import { GenerateCvUploadStep } from "@/components/generate-cv/GenerateCvUploadStep";
 import { GenerateCvReviewStep } from "@/components/generate-cv/GenerateCvReviewStep";
+import { ResumeDialog } from "@/components/resume/ResumeDialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { FlowNav } from "./FlowNav";
+import { FlowBadge, FlowNav } from "./FlowNav";
 import { useResumeStore, type AppFlow } from "@/store/resume-store";
 
 function getSubtitle(flow: AppFlow): string {
@@ -79,8 +80,12 @@ export function WizardShell() {
             </p>
             <FlowNav />
           </div>
-          <div className="shrink-0 pt-0.5">
-            <SettingsDialog />
+          <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
+            <div className="flex items-center gap-2">
+              <ResumeDialog />
+              <SettingsDialog />
+            </div>
+            {flow !== "landing" && <FlowBadge />}
           </div>
         </div>
       </header>

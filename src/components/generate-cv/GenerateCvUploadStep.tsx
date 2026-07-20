@@ -9,8 +9,8 @@ export function GenerateCvUploadStep() {
 
   return (
     <ResumeUploadStep
-      title="Generate Cover Letter"
-      description="Upload a resume PDF, then continue"
+      title="Generate Your Cover Letter"
+      description="Upload your resume, add the job details, then generate a cover letter in your chosen writing voice"
       showBack
       onBack={goToLanding}
       allowTemplate={false}

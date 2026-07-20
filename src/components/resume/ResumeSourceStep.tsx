@@ -8,8 +8,8 @@ export function ResumeSourceStep() {
 
   return (
     <ResumeUploadStep
-      title="Tailor Resume"
-      description="Upload a resume PDF, then continue"
+      title="Tailor Your Resume"
+      description="Upload your resume, then match it to a job description with a tailored resume and cover letter"
       showBack
       onBack={goToLanding}
     />

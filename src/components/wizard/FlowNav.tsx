@@ -41,6 +41,17 @@ function flowBadgeLabel(flow: AppFlow): string {
   return "Home";
 }
 
+export function FlowBadge() {
+  const flow = useResumeStore((s) => s.flow);
+  if (flow === "landing") return null;
+
+  return (
+    <span className="hidden rounded-full bg-primary-foreground/15 px-2.5 py-0.5 text-xs font-medium text-primary-foreground sm:inline-block">
+      {flowBadgeLabel(flow)}
+    </span>
+  );
+}
+
 export function FlowNav() {
   const store = useResumeStore();
   const { flow } = store;
@@ -86,11 +97,6 @@ export function FlowNav() {
             {item.label}
           </button>
         ))}
-        {flow !== "landing" && (
-          <span className="ml-auto rounded-full bg-primary-foreground/15 px-2.5 py-0.5 text-xs font-medium text-primary-foreground">
-            {flowBadgeLabel(flow)}
-          </span>
-        )}
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">

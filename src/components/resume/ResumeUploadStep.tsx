@@ -37,6 +37,7 @@ interface ResumeUploadStepProps {
 /**
  * Upload shows a snapshot immediately. AI parsing (needed for editable structure)
  * runs when the user clicks Continue — not while "uploading" the file.
+ * If a session master resume exists, Continue is enabled and the snapshot reuses it.
  */
 export function ResumeUploadStep({
   title = "Choose Resume Source",
@@ -66,22 +67,30 @@ export function ResumeUploadStep({
 
   const {
     resume,
+    masterResume,
+    masterResumeFile,
     setResume,
     setOriginalResume,
+    setMasterResume,
     clearAtsResult,
     nextStep,
     llmSettings,
     setError,
   } = useResumeStore();
 
+  const previewFile = selectedFile ?? masterResumeFile;
+  const hasMaster = Boolean(masterResume);
   const hasFileOrTemplate = Boolean(selectedFile) || templateReady || parsedOk;
   const storeHasResume = Boolean(
     resume.header.name.trim() ||
       resume.summary.trim() ||
       resume.experience.length
   );
-  const canContinue =
-    hasFileOrTemplate || storeHasResume;
+  const canContinue = hasFileOrTemplate || storeHasResume || hasMaster;
+  const uploadLabel =
+    previewFile || hasMaster || storeHasResume
+      ? "Replace resume PDF"
+      : "Upload resume PDF";
 
   function handleFileSelect(file: File) {
     setLocalError(null);
@@ -155,6 +164,7 @@ export function ResumeUploadStep({
       await complete();
       setResume(data.resume);
       setOriginalResume(data.resume);
+      setMasterResume(data.resume, file);
       setParsedOk(true);
       return true;
     } catch (err) {
@@ -172,7 +182,7 @@ export function ResumeUploadStep({
   async function handleContinue() {
     if (parsing) return;
 
-    if (templateReady || parsedOk || (storeHasResume && !selectedFile)) {
+    if (templateReady || parsedOk || (storeHasResume && !selectedFile) || (hasMaster && !selectedFile)) {
       nextStep();
       return;
     }
@@ -182,6 +192,9 @@ export function ResumeUploadStep({
     const ok = await parseSelectedFile(selectedFile);
     if (ok) nextStep();
   }
+
+  const readyName =
+    resume.header.name.trim() || masterResume?.header.name.trim() || "";
 
   return (
     <StepShell
@@ -224,7 +237,7 @@ export function ResumeUploadStep({
       )}
 
       <div className="mx-auto flex max-w-sm flex-col items-center gap-3">
-        <PdfPagePreview file={selectedFile} size="sm" />
+        <PdfPagePreview file={previewFile} size="sm" />
 
         {parsing && (
           <div className="w-full">
@@ -261,7 +274,7 @@ export function ResumeUploadStep({
           onClick={() => fileRef.current?.click()}
         >
           <FileUp className="size-4" />
-          {selectedFile ? "Choose another PDF" : "Upload resume PDF"}
+          {uploadLabel}
         </Button>
 
         {allowTemplate && (
@@ -276,12 +289,10 @@ export function ResumeUploadStep({
           </Button>
         )}
 
-        {parsedOk && !parsing && resume.header.name && (
+        {!parsing && readyName && (
           <p className="text-center text-sm text-muted-foreground">
-            Ready:{" "}
-            <span className="font-medium text-foreground">
-              {resume.header.name}
-            </span>
+            {hasMaster && !selectedFile && !parsedOk ? "Using session resume: " : "Ready: "}
+            <span className="font-medium text-foreground">{readyName}</span>
           </p>
         )}
       </div>
