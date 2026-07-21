@@ -74,7 +74,8 @@ export function normalizePrintableText(text: unknown): string {
     .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')
     .replace(/\u2026/g, "...")
     .replace(/[\u00A0\u202F\u2007]/g, " ")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "");
+    // Soft hyphens + zero-width chars cause mid-word PDF line breaks
+    .replace(/[\u00AD\u200B-\u200D\uFEFF]/g, "");
 
   return result;
 }
