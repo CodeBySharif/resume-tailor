@@ -30,6 +30,9 @@ Font.register({
   ],
 });
 
+/** Keep whole words intact — default hyphenation splits like "exp-rience". */
+Font.registerHyphenationCallback((word) => [word]);
+
 function sanitizePdfText(value: string): string {
   return normalizePrintableText(value);
 }
