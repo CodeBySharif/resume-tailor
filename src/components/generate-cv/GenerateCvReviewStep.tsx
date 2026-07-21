@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { ChevronLeft, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CoverLetterCanvas } from "@/components/review/CoverLetterCanvas";
-import { ResumePreview } from "@/components/resume/ResumePreview";
 import { StepShell } from "@/components/wizard/StepShell";
 import { stripCoverLetterSignature } from "@/lib/resume-header";
 import { normalizeResume } from "@/lib/resume-schema";
@@ -29,7 +28,6 @@ export function GenerateCvReviewStep() {
 
   const {
     resume,
-    tailoredResume,
     coverLetter,
     coverLetterMode,
     jobDetails,
@@ -41,15 +39,13 @@ export function GenerateCvReviewStep() {
     setStep,
   } = useResumeStore();
 
-  const displayResume = normalizeResume(
-    tailoredResume ?? resume
-  );
+  const displayResume = normalizeResume(resume);
   const body = stripCoverLetterSignature(coverLetter);
 
   return (
     <StepShell
       title="Review Cover Letter"
-      description="Preview and download your generated cover letter (and optional resume)"
+      description="Preview, edit, and download your generated cover letter"
       actions={
         <>
           <Button variant="outline" size="sm" onClick={prevStep}>
@@ -68,43 +64,37 @@ export function GenerateCvReviewStep() {
             company={jobDetails.company}
             role={jobDetails.role}
             coverLetterMode={coverLetterMode}
+            showResume={false}
           />
         </>
       }
     >
       <AiContentDisclaimer compact className="mb-4" />
-      <div className="space-y-8">
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Cover letter</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setEditingCover(!editingCover)}
-            >
-              <Pencil className="size-4" />
-              {editingCover ? "Done Editing" : "Edit Cover Letter"}
-            </Button>
-          </div>
-          <CoverLetterCanvas
-            header={displayResume.header}
-            company={jobDetails.company}
-            role={jobDetails.role}
-            body={body}
-            editable={editingCover}
-            onCompanyChange={(company) => updateJobDetails({ company })}
-            onRoleChange={(role) => updateJobDetails({ role })}
-            onBodyChange={(value) => {
-              setCoverLetter(value);
-              setCoverLetterMode("templated");
-            }}
-          />
-        </section>
-
-        <section className="space-y-3">
-          <h3 className="text-sm font-semibold">Source / tailored resume</h3>
-          <ResumePreview resume={displayResume} />
-        </section>
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Cover letter</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditingCover(!editingCover)}
+          >
+            <Pencil className="size-4" />
+            {editingCover ? "Done Editing" : "Edit Cover Letter"}
+          </Button>
+        </div>
+        <CoverLetterCanvas
+          header={displayResume.header}
+          company={jobDetails.company}
+          role={jobDetails.role}
+          body={body}
+          editable={editingCover}
+          onCompanyChange={(company) => updateJobDetails({ company })}
+          onRoleChange={(role) => updateJobDetails({ role })}
+          onBodyChange={(value) => {
+            setCoverLetter(value);
+            setCoverLetterMode("templated");
+          }}
+        />
       </div>
     </StepShell>
   );

@@ -30,7 +30,8 @@ function computeJobCompletion(jobDetails: {
 }
 
 export function JobDetailsForm() {
-  const { jobDetails, updateJobDetails, prevStep, nextStep } = useResumeStore();
+  const { flow, jobDetails, updateJobDetails, prevStep, nextStep } =
+    useResumeStore();
 
   const completion = useMemo(() => computeJobCompletion(jobDetails), [jobDetails]);
 
@@ -42,7 +43,9 @@ export function JobDetailsForm() {
   const helperText =
     completion < 100
       ? `${completion}% complete — add more job description for better results`
-      : "Ready to generate your tailored resume";
+      : flow === "generate-cv"
+        ? "Ready to generate your cover letter"
+        : "Ready to generate your tailored resume";
 
   return (
     <div className="space-y-6">

@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 const STEPS = [
   { num: 1, label: "Upload Resume" },
   { num: 2, label: "Job Details" },
-  { num: 3, label: "Generate" },
+  { num: 3, label: "Cover Letter" },
   { num: 4, label: "Download" },
 ] as const;
 

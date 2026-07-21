@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildTailorPrompt } from "@/lib/prompts";
+import { buildCoverLetterOnlyPrompt, buildTailorPrompt } from "@/lib/prompts";
 import { generateJSON, LLMProviderError } from "@/lib/llm/client";
 import {
   DEFAULT_LLM_SETTINGS,
@@ -23,14 +23,21 @@ export const maxDuration = 120;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { resume, jobDetails, generationStyle, settings, rewriteLocks } =
-      body as {
-        resume: Resume;
-        jobDetails: JobDetails;
-        generationStyle?: Partial<GenerationStyle>;
-        settings?: Partial<LLMSettings>;
-        rewriteLocks?: string[];
-      };
+    const {
+      resume,
+      jobDetails,
+      generationStyle,
+      settings,
+      rewriteLocks,
+      mode,
+    } = body as {
+      resume: Resume;
+      jobDetails: JobDetails;
+      generationStyle?: Partial<GenerationStyle>;
+      settings?: Partial<LLMSettings>;
+      rewriteLocks?: string[];
+      mode?: "tailor" | "coverLetterOnly";
+    };
 
     if (!resume || !jobDetails) {
       return NextResponse.json(
@@ -61,8 +68,31 @@ export async function POST(request: NextRequest) {
       ...generationStyle,
     };
 
-    const locks = Array.isArray(rewriteLocks) ? rewriteLocks : [];
     const source = normalizeResume(resume);
+    const coverOnly = mode === "coverLetterOnly";
+
+    if (coverOnly) {
+      const prompt = buildCoverLetterOnlyPrompt(source, jobDetails, style);
+      const llm = await generateJSON(prompt, llmSettings);
+      const parsed = JSON.parse(llm.text) as { coverLetter?: unknown };
+
+      return NextResponse.json({
+        resume: source,
+        coverLetter: normalizePrintableText(
+          Array.isArray(parsed.coverLetter)
+            ? parsed.coverLetter
+            : (parsed.coverLetter ?? "")
+        ),
+        changes: [],
+        meta: {
+          provider: llm.provider,
+          totalDurationMs: llm.totalDurationMs,
+          attempts: llm.attempts,
+        },
+      });
+    }
+
+    const locks = Array.isArray(rewriteLocks) ? rewriteLocks : [];
     const prompt = buildTailorPrompt(source, jobDetails, style, locks);
     const llm = await generateJSON(prompt, llmSettings);
     const parsed = JSON.parse(llm.text) as TailorResult;
@@ -103,6 +133,9 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : "Failed to tailor resume";
     const attempts =
       error instanceof LLMProviderError ? error.attempts : undefined;
-    return NextResponse.json({ error: message, meta: { attempts } }, { status: 500 });
+    return NextResponse.json(
+      { error: message, meta: { attempts } },
+      { status: 500 }
+    );
   }
 }

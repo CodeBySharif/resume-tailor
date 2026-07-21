@@ -161,6 +161,80 @@ Return JSON with this exact structure:
 ${preserveResume ? "If the resume was left unchanged, return an empty changes array." : "Include at least 3 meaningful changes in the changes array."} Return ONLY valid JSON.`;
 }
 
+/** Cover letter only — resume is source material, not rewritten. */
+export function buildCoverLetterOnlyPrompt(
+  resume: Resume,
+  job: JobDetails,
+  style: GenerationStyle
+): string {
+  const excludeList = job.skillsToExclude
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const excludeSection =
+    excludeList.length > 0
+      ? `
+Skills/topics to NEVER mention (not in the candidate's background):
+${excludeList.map((s) => `- ${s}`).join("\n")}
+`
+      : "";
+
+  const excitesSection = job.whatExcitesYou.trim()
+    ? `
+What excites the candidate about this role/company (weave in if natural):
+${job.whatExcitesYou.trim()}
+`
+    : "";
+
+  const gapsSection = job.skillGaps.trim()
+    ? `
+Requirements the candidate does NOT fully meet (acknowledge honestly — emphasize transferable skills, do NOT claim expertise they lack):
+${job.skillGaps.trim()}
+`
+    : "";
+
+  const coverTone = getToneOption(style.coverLetterTone);
+  const metricsModeNote =
+    style.coverLetterTone === "metrics"
+      ? `
+Metrics-driven mode guidance:
+- Prioritize quantified impact where the source resume supports it
+- If exact values are missing, use conservative draft placeholders — never exaggerate
+`
+      : "";
+
+  return `You are an expert cover letter writer. Write a cover letter for the target job using ONLY facts from the candidate's resume. Do NOT rewrite or return a resume.
+
+Writing voice:
+- Cover letter tone (${coverTone.label}): ${coverTone.coverLetterPrompt}
+${metricsModeNote}
+
+Target Job:
+- Company: ${job.company}
+- Role: ${job.role}
+- Job Description:
+${job.jobDescription}
+${excludeSection}${excitesSection}${gapsSection}
+Candidate Resume (JSON — use as factual source only):
+${JSON.stringify(resume, null, 2)}
+
+Cover letter instructions:
+1. Write a cover letter body (3-4 paragraphs) — do NOT include sender address, date, greeting, or sign-off (the app adds those)
+2. Align to the job description using only experience the candidate actually has
+3. Do NOT fabricate employers, roles, skills, or credentials
+4. Do not mention any excluded skills/topics listed above
+5. If "what excites the candidate" notes are provided, include genuine enthusiasm
+6. If skill gap notes are provided, address gaps honestly with transferable strengths
+
+Return JSON with this exact structure:
+{
+  "coverLetter": "<cover letter body paragraphs only, no header or signature>"
+}
+
+Return ONLY valid JSON.`;
+}
+
 /** Rewrite a resume in a chosen voice with no job description (edit-resume flow). */
 export function buildRewriteResumePrompt(
   resume: Resume,

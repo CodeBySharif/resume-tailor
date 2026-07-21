@@ -32,6 +32,7 @@ import { EditCoverEditStep } from "@/components/edit/EditCoverEditStep";
 import { EditCoverReviewStep } from "@/components/edit/EditCoverReviewStep";
 import { GenerateCvStepIndicator } from "@/components/generate-cv/GenerateCvStepIndicator";
 import { GenerateCvUploadStep } from "@/components/generate-cv/GenerateCvUploadStep";
+import { GenerateCvGenerateStep } from "@/components/generate-cv/GenerateCvGenerateStep";
 import { GenerateCvReviewStep } from "@/components/generate-cv/GenerateCvReviewStep";
 import { ResumeDialog } from "@/components/resume/ResumeDialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
@@ -144,7 +145,7 @@ export function WizardShell() {
 
             {flow === "generate-cv" && step === 1 && <GenerateCvUploadStep />}
             {flow === "generate-cv" && step === 2 && <JobDetailsForm />}
-            {flow === "generate-cv" && step === 3 && <GenerateStep />}
+            {flow === "generate-cv" && step === 3 && <GenerateCvGenerateStep />}
             {flow === "generate-cv" && step === 4 && <GenerateCvReviewStep />}
           </Card>
         </div>
