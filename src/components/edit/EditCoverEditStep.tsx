@@ -2,20 +2,31 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FreeformCoverEditor } from "@/components/review/FreeformCoverEditor";
+import { CoverLetterCanvas } from "@/components/review/CoverLetterCanvas";
 import { StepShell } from "@/components/wizard/StepShell";
+import { stripCoverLetterSignature } from "@/lib/resume-header";
+import { normalizeResume } from "@/lib/resume-schema";
 import { useResumeStore } from "@/store/resume-store";
 
 export function EditCoverEditStep() {
-  const { coverLetter, setCoverLetter, setCoverLetterMode, prevStep, nextStep } =
-    useResumeStore();
+  const {
+    resume,
+    coverLetter,
+    jobDetails,
+    setCoverLetter,
+    setCoverLetterMode,
+    updateJobDetails,
+    prevStep,
+    nextStep,
+  } = useResumeStore();
 
-  const canContinue = Boolean(coverLetter.trim());
+  const body = stripCoverLetterSignature(coverLetter);
+  const canContinue = Boolean(body.trim());
 
   return (
     <StepShell
       title="Edit Cover Letter"
-      description="Edit the full letter text as it will appear in the PDF — nothing is added around it"
+      description="Edit directly in the letter layout — header, recipient, and body stay formatted"
       actions={
         <>
           <Button variant="outline" size="sm" onClick={prevStep}>
@@ -26,7 +37,7 @@ export function EditCoverEditStep() {
             size="sm"
             disabled={!canContinue}
             onClick={() => {
-              setCoverLetterMode("freeform");
+              setCoverLetterMode("templated");
               nextStep();
             }}
             className="bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90"
@@ -37,11 +48,17 @@ export function EditCoverEditStep() {
         </>
       }
     >
-      <FreeformCoverEditor
-        value={coverLetter}
-        onChange={(value) => {
+      <CoverLetterCanvas
+        header={normalizeResume(resume).header}
+        company={jobDetails.company}
+        role={jobDetails.role}
+        body={body}
+        editable
+        onCompanyChange={(company) => updateJobDetails({ company })}
+        onRoleChange={(role) => updateJobDetails({ role })}
+        onBodyChange={(value) => {
           setCoverLetter(value);
-          setCoverLetterMode("freeform");
+          setCoverLetterMode("templated");
         }}
       />
     </StepShell>

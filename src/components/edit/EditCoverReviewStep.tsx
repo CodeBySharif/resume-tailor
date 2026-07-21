@@ -4,12 +4,10 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import { ChevronLeft, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  FreeformCoverEditor,
-  FreeformCoverPreview,
-} from "@/components/review/FreeformCoverEditor";
+import { CoverLetterCanvas } from "@/components/review/CoverLetterCanvas";
 import { StepShell } from "@/components/wizard/StepShell";
-import { createEmptyResume, normalizeResume } from "@/lib/resume-schema";
+import { stripCoverLetterSignature } from "@/lib/resume-header";
+import { normalizeResume } from "@/lib/resume-schema";
 import { useResumeStore } from "@/store/resume-store";
 
 const PdfDownloadButtons = dynamic(
@@ -30,21 +28,22 @@ export function EditCoverReviewStep() {
     resume,
     coverLetter,
     coverLetterMode,
+    jobDetails,
     setCoverLetter,
     setCoverLetterMode,
+    updateJobDetails,
     resetAll,
     prevStep,
     setStep,
   } = useResumeStore();
 
-  const displayResume = normalizeResume(
-    resume.header.name.trim() ? resume : createEmptyResume()
-  );
+  const displayResume = normalizeResume(resume);
+  const body = stripCoverLetterSignature(coverLetter);
 
   return (
     <StepShell
       title="Download Cover Letter"
-      description="Preview the letter exactly as the PDF — edit freely if needed"
+      description="Preview and download the formatted letter — edit on the page if needed"
       actions={
         <>
           <Button variant="outline" size="sm" onClick={prevStep}>
@@ -65,12 +64,12 @@ export function EditCoverReviewStep() {
           <Button variant="outline" size="sm" onClick={resetAll}>
             Start Over
           </Button>
-          {coverLetter.trim() && (
+          {body.trim() && (
             <PdfDownloadButtons
               resume={displayResume}
               coverLetter={coverLetter}
-              company="Edited"
-              role=""
+              company={jobDetails.company || "Company"}
+              role={jobDetails.role}
               coverLetterMode={coverLetterMode}
               showResume={false}
               showCover
@@ -80,27 +79,30 @@ export function EditCoverReviewStep() {
       }
     >
       <div className="space-y-3">
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Cover letter</h3>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setEditing(!editing)}
           >
             <Pencil className="size-4" />
-            {editing ? "Done Editing" : "Edit on page"}
+            {editing ? "Done Editing" : "Edit Cover Letter"}
           </Button>
         </div>
-        {editing ? (
-          <FreeformCoverEditor
-            value={coverLetter}
-            onChange={(value) => {
-              setCoverLetter(value);
-              setCoverLetterMode("freeform");
-            }}
-          />
-        ) : (
-          <FreeformCoverPreview value={coverLetter} />
-        )}
+        <CoverLetterCanvas
+          header={displayResume.header}
+          company={jobDetails.company}
+          role={jobDetails.role}
+          body={body}
+          editable={editing}
+          onCompanyChange={(company) => updateJobDetails({ company })}
+          onRoleChange={(role) => updateJobDetails({ role })}
+          onBodyChange={(value) => {
+            setCoverLetter(value);
+            setCoverLetterMode("templated");
+          }}
+        />
       </div>
     </StepShell>
   );

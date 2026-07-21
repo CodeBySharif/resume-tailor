@@ -100,13 +100,13 @@ export function CoverLetterCanvas({
       {editable ? (
         <textarea
           aria-label="Cover letter body"
-          rows={Math.max(8, paragraphs.length * 3 || 8)}
+          rows={Math.max(10, paragraphs.length * 4 || 10)}
           placeholder="Write your cover letter body here. Separate paragraphs with a blank line."
           value={body}
           onChange={(e) => onBodyChange?.(e.target.value)}
           className={cn(
             fieldClass,
-            "mt-4 min-h-[180px] resize-y border border-dashed border-gray-200 bg-gray-50/40 p-3 text-justify focus:border-gray-300 focus:bg-white"
+            "mt-4 min-h-[200px] resize-y text-justify text-gray-800"
           )}
         />
       ) : (

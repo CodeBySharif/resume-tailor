@@ -259,16 +259,17 @@ export const useResumeStore = create<ResumeStore>((set) => ({
       },
     })),
   startEditCoverFlow: () =>
-    set({
+    set((s) => ({
       flow: "edit-cover",
       step: 1,
       ...clearFlowState(),
-      coverLetterMode: "freeform",
+      ...seedFromMaster(s.masterResume),
+      coverLetterMode: "templated",
       generationStyle: {
         ...DEFAULT_GENERATION_STYLE,
         coverLetterTone: DEFAULT_EDIT_COVER_TONE,
       },
-    }),
+    })),
   startGenerateCvFlow: () =>
     set((s) => ({
       flow: "generate-cv",
