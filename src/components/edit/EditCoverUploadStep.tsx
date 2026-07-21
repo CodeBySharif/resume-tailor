@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button";
 import { PdfPagePreview } from "@/components/resume/PdfPagePreview";
 import { StepShell } from "@/components/wizard/StepShell";
 import { readJsonResponse } from "@/lib/api-response";
+import {
+  mergeCoverLetterHeader,
+  parseCoverLetterUpload,
+} from "@/lib/parse-cover-letter";
+import { createEmptyResume, normalizeResume } from "@/lib/resume-schema";
+import { stripCoverLetterSignature } from "@/lib/resume-header";
 import { useResumeStore } from "@/store/resume-store";
 
 export function EditCoverUploadStep() {
@@ -16,9 +22,13 @@ export function EditCoverUploadStep() {
   const [ready, setReady] = useState(false);
 
   const {
+    resume,
+    masterResume,
     coverLetter,
+    setResume,
     setCoverLetter,
     setCoverLetterMode,
+    updateJobDetails,
     goToLanding,
     nextStep,
   } = useResumeStore();
@@ -50,8 +60,27 @@ export function EditCoverUploadStep() {
         throw new Error("Could not extract text from PDF");
       }
 
-      setCoverLetter(data.text.trim());
-      setCoverLetterMode("freeform");
+      const parsed = parseCoverLetterUpload(data.text);
+      const fallbackHeader =
+        masterResume?.header ??
+        (resume.header.name.trim() ? resume.header : null);
+      const header = mergeCoverLetterHeader(parsed.header, fallbackHeader);
+
+      setResume(
+        normalizeResume({
+          ...createEmptyResume(),
+          ...resume,
+          header,
+        })
+      );
+      setCoverLetter(
+        stripCoverLetterSignature(parsed.body) || parsed.body.trim()
+      );
+      updateJobDetails({
+        company: parsed.company,
+        role: parsed.role,
+      });
+      setCoverLetterMode("templated");
       setReady(true);
     } catch (err) {
       setSelectedFile(null);
@@ -65,14 +94,14 @@ export function EditCoverUploadStep() {
 
   function handleContinue() {
     if (!coverLetter.trim()) return;
-    setCoverLetterMode("freeform");
+    setCoverLetterMode("templated");
     nextStep();
   }
 
   return (
     <StepShell
       title="Edit Cover Letter"
-      description="Upload a cover letter PDF — snapshot only here; you edit the text in the next steps"
+      description="Upload a cover letter PDF — we'll place it into the formatted letter layout for editing"
       actions={
         <>
           <Button
@@ -107,6 +136,7 @@ export function EditCoverUploadStep() {
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void handlePdfUpload(file);
+            e.target.value = "";
           }}
         />
 
@@ -125,7 +155,7 @@ export function EditCoverUploadStep() {
 
         {ready && !uploading && (
           <p className="text-center text-xs text-muted-foreground">
-            PDF loaded — continue to edit
+            Loaded into letter format — continue to edit
           </p>
         )}
 

@@ -1,4 +1,4 @@
-import { extractText, getDocumentProxy } from "unpdf";
+import { extractTextItems, getDocumentProxy } from "unpdf";
 
 /** Always return a plain Uint8Array — pdf.js rejects Node Buffer even though Buffer extends Uint8Array. */
 function toPlainUint8Array(input: ArrayBuffer | Uint8Array | Buffer): Uint8Array {
@@ -7,6 +7,39 @@ function toPlainUint8Array(input: ArrayBuffer | Uint8Array | Buffer): Uint8Array
   }
   // Copy so the result is not a Buffer subclass
   return new Uint8Array(input);
+}
+
+/**
+ * Rebuild text with real line breaks using PDF text-item EOL flags.
+ * Plain extractText often collapses our cover-letter PDF into one line.
+ */
+function itemsToText(items: Awaited<ReturnType<typeof extractTextItems>>["items"]): string {
+  const lines: string[] = [];
+  let current = "";
+
+  for (const page of items) {
+    for (const item of page) {
+      current += item.str;
+      if (item.hasEOL) {
+        lines.push(current.replace(/\s+$/g, ""));
+        current = "";
+      }
+    }
+    if (current.trim()) {
+      lines.push(current.replace(/\s+$/g, ""));
+      current = "";
+    }
+    // Page break as blank line so structure survives merge
+    if (lines.length > 0 && lines[lines.length - 1] !== "") {
+      lines.push("");
+    }
+  }
+
+  while (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
+  return lines.join("\n").trim();
 }
 
 /**
@@ -29,17 +62,18 @@ export async function extractTextFromPdfBuffer(
   }
 
   const pdf = await getDocumentProxy(data);
-  const { text, totalPages } = await extractText(pdf, { mergePages: true });
-  const merged = (typeof text === "string" ? text : "").trim();
+  const { items, totalPages } = await extractTextItems(pdf);
+
+  if (totalPages === 0) {
+    throw new Error("PDF has no pages");
+  }
+
+  const merged = itemsToText(items);
 
   if (!merged) {
     throw new Error(
       "Could not extract text from PDF. Try a text-based PDF (not a scanned image)."
     );
-  }
-
-  if (totalPages === 0) {
-    throw new Error("PDF has no pages");
   }
 
   return merged;

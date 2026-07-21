@@ -14,6 +14,7 @@ import { isPreserveTone } from "@/lib/writing-tone";
 import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
 import { useResumeStore } from "@/store/resume-store";
 import { AiContentDisclaimer } from "@/components/ui/ai-content-disclaimer";
+import { stripCoverLetterSignature } from "@/lib/resume-header";
 
 export function EditCoverToneStep() {
   const [rewriting, setRewriting] = useState(false);
@@ -36,7 +37,7 @@ export function EditCoverToneStep() {
     useTimedOperationProgress(40000);
 
   async function handleContinue() {
-    setCoverLetterMode("freeform");
+    setCoverLetterMode("templated");
 
     if (isPreserveTone(generationStyle.coverLetterTone)) {
       nextStep();
@@ -84,8 +85,9 @@ export function EditCoverToneStep() {
 
       setStatus("Finishing…");
       await finish();
-      setCoverLetter(data.coverLetter);
-      setCoverLetterMode("freeform");
+      // Keep body-only so the templated canvas / PDF can wrap greeting & sign-off
+      setCoverLetter(stripCoverLetterSignature(data.coverLetter));
+      setCoverLetterMode("templated");
       nextStep();
     } catch (err) {
       reset();
@@ -136,11 +138,11 @@ export function EditCoverToneStep() {
 
       <StepChoice
         title="Cover letter voice"
-        description={"Choose “Don't rewrite” to edit the extracted letter as-is"}
+        description={"Choose “Don't rewrite” to edit the letter in format as-is"}
       >
         <TonePicker
           label="How should this letter sound?"
-          description="Don't rewrite keeps the uploaded / pasted text"
+          description="Don't rewrite keeps your uploaded wording in the letter layout"
           value={generationStyle.coverLetterTone}
           onChange={(coverLetterTone) =>
             updateGenerationStyle({ coverLetterTone })
