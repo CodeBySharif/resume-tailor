@@ -10,7 +10,7 @@ import {
 } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
 import type { Resume, ResumeHeader } from "./resume-schema";
-import { getProjectBullets } from "./resume-schema";
+import { formatProjectTechBullet, getProjectBullets } from "./resume-schema";
 import { formatDateRange } from "./date-utils";
 import { formatExperienceCompanyLine } from "./experience-format";
 import { formatDisplayName, formatDisplayTitle } from "./format-name";
@@ -313,13 +313,14 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
           <PdfResumeSection title="Projects">
             {resume.projects.map((proj, index) => {
               const bullets = getProjectBullets(proj).filter(Boolean);
+              const techBullet = formatProjectTechBullet(proj.technologies);
               return (
               <View
                 key={proj.id}
                 style={index > 0 ? styles.resumeEntry : undefined}
               >
                 <Text style={styles.entryTitle}>{sanitizePdfText(proj.name)}</Text>
-                {bullets.length > 0 ? (
+                {bullets.length > 0 || techBullet ? (
                   <View style={styles.contentSpaced}>
                     {bullets.map((bullet, i) => (
                       <View key={i} style={styles.bullet}>
@@ -329,12 +330,15 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
                         </Text>
                       </View>
                     ))}
+                    {techBullet ? (
+                      <View style={styles.bullet}>
+                        <Text style={styles.bulletDot}>•</Text>
+                        <Text style={styles.bulletText}>
+                          {sanitizePdfText(techBullet)}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
-                {proj.technologies && proj.technologies.length > 0 ? (
-                  <Text style={[styles.projectTech, styles.contentSpaced]}>
-                    {sanitizePdfText(proj.technologies.join(" · "))}
-                  </Text>
                 ) : null}
               </View>
               );

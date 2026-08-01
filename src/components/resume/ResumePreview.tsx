@@ -1,7 +1,7 @@
 "use client";
 
 import type { Resume } from "@/lib/resume-schema";
-import { getProjectBullets } from "@/lib/resume-schema";
+import { formatProjectTechBullet, getProjectBullets } from "@/lib/resume-schema";
 import { formatExperienceCompanyLine } from "@/lib/experience-format";
 import { formatDateRange } from "@/lib/date-utils";
 import { RESUME_SPACE_EM } from "@/lib/resume-spacing";
@@ -121,6 +121,7 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
         <ResumeSection title="Projects">
           {resume.projects.map((proj, index) => {
             const bullets = getProjectBullets(proj).filter(Boolean);
+            const techBullet = formatProjectTechBullet(proj.technologies);
             return (
             <EntryBlock key={proj.id} index={index}>
               <ContentBlock>
@@ -128,7 +129,7 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
                   {proj.name}
                 </p>
               </ContentBlock>
-              {bullets.length > 0 && (
+              {(bullets.length > 0 || techBullet) && (
                 <ContentBlock spaced>
                   <ul className="list-disc space-y-0.5 pl-4">
                     {bullets.map((bullet, i) => (
@@ -136,21 +137,10 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
                         {bullet}
                       </li>
                     ))}
+                    {techBullet ? (
+                      <li className="leading-tight">{techBullet}</li>
+                    ) : null}
                   </ul>
-                </ContentBlock>
-              )}
-              {proj.technologies && proj.technologies.length > 0 && (
-                <ContentBlock spaced>
-                  <div className="flex flex-wrap gap-1">
-                    {proj.technologies.map((tech) => (
-                      <span
-                        key={tech}
-                        className="rounded bg-gray-100 px-1.5 py-0.5 text-[8.5pt] leading-tight text-gray-700"
-                      >
-                        {tech}
-                      </span>
-                    ))}
-                  </div>
                 </ContentBlock>
               )}
             </EntryBlock>

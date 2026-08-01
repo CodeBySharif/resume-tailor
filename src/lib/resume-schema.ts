@@ -351,6 +351,19 @@ export function getProjectBullets(
   return lines.length > 0 ? lines : [description];
 }
 
+/** Single bullet listing all project technologies (not one bullet per tech). */
+export function formatProjectTechBullet(
+  technologies: string[] | undefined | null
+): string | null {
+  const techs = (technologies ?? [])
+    .map((t) => normalizePrintableText(t))
+    .filter(Boolean);
+  if (techs.length === 0) return null;
+  if (techs.length === 1) return `Technologies: ${techs[0]}`;
+  if (techs.length === 2) return `Technologies: ${techs[0]} and ${techs[1]}`;
+  return `Technologies: ${techs.slice(0, -1).join(", ")}, and ${techs[techs.length - 1]}`;
+}
+
 function normalizeProjectBullets(
   project: Partial<Project>,
   sanitizeArtifacts: boolean
