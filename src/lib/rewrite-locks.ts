@@ -78,7 +78,10 @@ export function applyRewriteLocks(
       technologies: p.technologies ? [...p.technologies] : undefined,
     })),
     education: [...next.education],
-    skills: [...next.skills],
+    skills: next.skills.map((c) => ({
+      ...c,
+      skills: [...c.skills],
+    })),
     languages: [...next.languages],
     customSections: [...next.customSections],
   };

@@ -3,9 +3,9 @@ import { formatDisplayName, formatDisplayPhone } from "@/lib/format-name";
 
 export function getHeaderContactParts(header: ResumeHeader): string[] {
   const parts = [
+    header.city,
     header.phone ? formatDisplayPhone(header.phone) : "",
     header.email,
-    header.city,
   ].filter(Boolean);
 
   if (header.showLinkedin && header.linkedin) {
@@ -19,7 +19,7 @@ export function getHeaderContactParts(header: ResumeHeader): string[] {
 }
 
 export function getHeaderContactLine(header: ResumeHeader): string {
-  return getHeaderContactParts(header).join(" | ");
+  return getHeaderContactParts(header).join(" · ");
 }
 
 export function getCoverLetterSenderLines(header: ResumeHeader): string[] {

@@ -1,21 +1,27 @@
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const MAX_RETRIES_PER_MODEL = 1;
-const MAX_UPSTREAM_FALLBACKS = 2;
+const MAX_UPSTREAM_FALLBACKS = 3;
 const REQUEST_TIMEOUT_MS = 120_000;
 
 /**
  * Specific free models to try after openrouter/free hits a temporary upstream limit.
+ * Free catalog churns — keep IDs that are commonly available; 404s skip to the next.
  * @see https://openrouter.ai/docs/guides/routing/routers/free-router
  */
 const FREE_MODEL_FALLBACKS = [
   "openai/gpt-oss-20b:free",
-  "nvidia/nemotron-nano-9b-v2:free",
+  "nvidia/nemotron-3-nano-30b-a3b:free",
   "nvidia/nemotron-3-super-120b-a12b:free",
-  "google/gemini-2.5-flash:free",
   "meta-llama/llama-3.3-70b-instruct:free",
   "qwen/qwen3-coder:free",
 ] as const;
+
+/** Models that OpenRouter no longer serves — force Settings back to Auto. */
+const RETIRED_OPENROUTER_MODELS = new Set([
+  "nvidia/nemotron-nano-9b-v2:free",
+  "google/gemini-2.5-flash:free",
+]);
 
 export const OPENROUTER_MODEL_PRESETS = [
   {
@@ -31,9 +37,9 @@ export const OPENROUTER_MODEL_PRESETS = [
     description: "OpenAI open-weight model, good general quality",
   },
   {
-    label: "Nemotron Nano 9B V2 (free)",
-    value: "nvidia/nemotron-nano-9b-v2:free",
-    context: "128K",
+    label: "Nemotron 3 Nano (free)",
+    value: "nvidia/nemotron-3-nano-30b-a3b:free",
+    context: "256K",
     description: "NVIDIA compact model, fast responses",
   },
   {
@@ -41,12 +47,6 @@ export const OPENROUTER_MODEL_PRESETS = [
     value: "nvidia/nemotron-3-super-120b-a12b:free",
     context: "256K",
     description: "NVIDIA larger model, stronger reasoning",
-  },
-  {
-    label: "Gemini 2.5 Flash (free)",
-    value: "google/gemini-2.5-flash:free",
-    context: "1M",
-    description: "Google model, huge context window",
   },
   {
     label: "Llama 3.3 70B (free)",
@@ -62,17 +62,34 @@ export const OPENROUTER_MODEL_PRESETS = [
   },
 ] as const;
 
+/** Normalize stored Settings model if OpenRouter retired it. */
+export function sanitizeOpenRouterModel(model: string | undefined | null): string {
+  const value = (model ?? "").trim() || DEFAULT_OPENROUTER_MODEL;
+  if (RETIRED_OPENROUTER_MODELS.has(value)) {
+    return DEFAULT_OPENROUTER_MODEL;
+  }
+  const known = OPENROUTER_MODEL_PRESETS.some((p) => p.value === value);
+  if (!known && value !== DEFAULT_OPENROUTER_MODEL) {
+    // Keep custom IDs, but retired ones already handled above
+    return value;
+  }
+  return value;
+}
+
 function resolveModels(model: string): string[] {
-  const primary = model || DEFAULT_OPENROUTER_MODEL;
+  const primary = sanitizeOpenRouterModel(model || DEFAULT_OPENROUTER_MODEL);
+  const fallbacks = FREE_MODEL_FALLBACKS.slice(0, MAX_UPSTREAM_FALLBACKS);
 
   if (primary === "openrouter/free") {
-    return [
-      "openrouter/free",
-      ...FREE_MODEL_FALLBACKS.slice(0, MAX_UPSTREAM_FALLBACKS),
-    ];
+    return ["openrouter/free", ...fallbacks];
   }
 
-  return [primary];
+  // Pinned model first; if it 404s / fails, fall through Auto + free backups
+  return [
+    primary,
+    "openrouter/free",
+    ...fallbacks.filter((m) => m !== primary),
+  ];
 }
 
 function isDailyQuotaExceeded(body: string, message: string): boolean {
@@ -85,6 +102,21 @@ function isUpstreamRateLimited(body: string, message: string): boolean {
   return (
     text.includes("temporarily rate-limited") ||
     text.includes("provider returned error")
+  );
+}
+
+/** Model removed from OpenRouter catalog — skip to next candidate. */
+function isMissingEndpoint(
+  status: number,
+  body: string,
+  message: string
+): boolean {
+  if (status !== 404) return false;
+  const text = `${body} ${message}`.toLowerCase();
+  return (
+    text.includes("no endpoints found") ||
+    text.includes("not found") ||
+    text.includes("no endpoints")
   );
 }
 
@@ -202,6 +234,11 @@ export async function generateWithOpenRouter(
           throw new Error(dailyQuotaMessage());
         }
 
+        // Retired / unavailable model — try the next candidate immediately
+        if (isMissingEndpoint(status ?? 0, body, msg)) {
+          break;
+        }
+
         if (isRetryableRateLimit(status ?? 0, body, msg)) {
           sawUpstreamRateLimit = true;
           await new Promise((r) => setTimeout(r, 2000));
@@ -219,11 +256,19 @@ export async function generateWithOpenRouter(
     throw new Error(upstreamRateLimitMessage());
   }
 
-  throw new Error(errors.at(-1) ?? "OpenRouter generation failed");
+  const summary =
+    errors.length > 1
+      ? `All OpenRouter models failed. Last: ${errors.at(-1)}. Tried: ${errors
+          .map((e) => e.split(":")[0])
+          .join(" → ")}`
+      : errors.at(-1);
+
+  throw new Error(summary ?? "OpenRouter generation failed");
 }
 
 export function getOpenRouterModelLabel(model: string): string {
-  const preset = OPENROUTER_MODEL_PRESETS.find((p) => p.value === model);
+  const resolved = sanitizeOpenRouterModel(model);
+  const preset = OPENROUTER_MODEL_PRESETS.find((p) => p.value === resolved);
   if (preset) return preset.label;
   return "OpenRouter (free)";
 }

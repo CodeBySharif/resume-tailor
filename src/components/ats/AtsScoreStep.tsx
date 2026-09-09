@@ -15,6 +15,7 @@ import { ResumePreview } from "@/components/resume/ResumePreview";
 import { StepShell } from "@/components/wizard/StepShell";
 import { useTimedOperationProgress } from "@/hooks/useTimedOperationProgress";
 import { useResumeStore } from "@/store/resume-store";
+import { flattenSkills } from "@/lib/resume-schema";
 
 const ATS_CHECK_STATUS_MESSAGES = [
   "Reading resume structure…",
@@ -137,8 +138,9 @@ export function AtsScoreStep() {
                   {resume.header.title ? ` · ${resume.header.title}` : ""}
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {bulletCount} experience bullets · {resume.skills.length}{" "}
-                  skills · {resume.projects.length} projects
+                  {bulletCount} experience bullets ·{" "}
+                  {flattenSkills(resume.skills).length} skills ·{" "}
+                  {resume.projects.length} projects
                 </p>
               </div>
 

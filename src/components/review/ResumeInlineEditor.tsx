@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StringListField } from "@/components/ui/string-list-field";
+import { SkillCategoriesField } from "@/components/ui/skill-categories-field";
 import { LanguageListField } from "@/components/ui/language-list-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -340,13 +341,9 @@ export function ResumeInlineEditor({
         </SectionBlock>
       ))}
 
-      <StringListField
-        label="Skills"
-        placeholder="e.g. TypeScript"
-        values={resume.skills}
-        onChange={(skills) =>
-          applyUpdate((r) => ({ ...r, skills }))
-        }
+      <SkillCategoriesField
+        categories={resume.skills}
+        onChange={(skills) => applyUpdate((r) => ({ ...r, skills }))}
       />
 
       <LanguageListField

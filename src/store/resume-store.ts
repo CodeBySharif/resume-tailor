@@ -21,6 +21,7 @@ import type { AtsCheckResult } from "@/lib/ats-types";
 import type { ResumeSuggestResult } from "@/lib/resume-suggest-types";
 import { resumeHasParseArtifacts } from "@/lib/resume-parse-sanitize";
 import { normalizePrintableText } from "@/lib/text-normalize";
+import { sanitizeOpenRouterModel } from "@/lib/llm/openrouter";
 
 export type AppFlow =
   | "landing"
@@ -185,9 +186,11 @@ function loadSettingsFromStorage(): LLMSettings {
       };
       if (!parsed.groqApiKey) parsed.groqApiKey = "";
       if (!parsed.openrouterApiKey) parsed.openrouterApiKey = "";
-      if (!parsed.openrouterModel) {
-        parsed.openrouterModel = "openrouter/free";
-      }
+      parsed.openrouterModel = sanitizeOpenRouterModel(
+        typeof parsed.openrouterModel === "string"
+          ? parsed.openrouterModel
+          : undefined
+      );
       return parsed;
     }
   } catch {

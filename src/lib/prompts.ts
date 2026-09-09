@@ -14,6 +14,16 @@ import {
 import { formatRewriteLocksForPrompt } from "./rewrite-locks";
 
 const SHARED_RESUME_WRITING_RULES = `
+Tone rules:
+- Sound like a real person wrote it — natural, clear, and conversational-professional
+- Avoid stiff corporate filler and buzzword stacking
+- Prefer plain phrasing over ornate or overly formal wording
+
+Hyphen / compound-word rules:
+- Do NOT use hyphenated compounds in the middle of wording (e.g. write "well versed" not "well-versed", "detail oriented" not "detail-oriented", "full stack" not "full-stack" when used as a soft adjective)
+- Keep hyphens only where standard for names/versions (e.g. "CI/CD", "Node.js", "e-commerce" as a product term, phone numbers, or established tech names)
+- Prefer spaces over decorative hyphens in resume bullets and cover letter prose
+
 Metrics rules:
 - Only use numbers explicitly stated in the source resume unless metrics-driven mode is active
 - If drafting metrics, use conservative, believable estimates — never inflate or exaggerate to impress recruiters
@@ -24,6 +34,16 @@ Action verb rules:
 - Vary bullet openings across the entire resume
 - No action verb (or close synonym) may appear more than twice across all experience bullets combined
 - Prefer distinct strong verbs (e.g. Built, Led, Improved, Delivered, Automated, Designed)
+`;
+
+const SHARED_COVER_LETTER_WRITING_RULES = `
+Tone rules:
+- Sound human and natural — confident but not robotic or salesy
+- Prefer plain wording over stiff phrases
+
+Hyphen / compound-word rules:
+- Do NOT use hyphenated compounds in prose (e.g. "well versed" not "well-versed", "detail oriented" not "detail-oriented")
+- Keep hyphens only for standard names/versions (CI/CD, Node.js) or established product terms
 `;
 
 export function buildParseResumePrompt(text: string): string {
@@ -40,12 +60,21 @@ Rules:
 - Split bullet points into the bullets array for experience and projects
 - projects must use a bullets array (one achievement per bullet), like work experience — not a single paragraph description
 - projects.technologies MUST be a JSON array of strings (e.g. [".NET Core", "MVC"]) — one technology per entry, never a plain string, never inside bullets, never commentary
-- skills must be an array with one skill per entry — never a single comma-separated string
+- skills MUST be an array of category objects: { "id": "uuid", "name": "Frontend|Backend|Database|Deployment|Tools|Other|<custom>", "skills": ["string"] }
+- Prefer classifying skills into Frontend, Backend, Database, Deployment, or Tools when clear from context
+- If the resume skills section has NO category headers (or categories are unclear), put ALL skills in a single category named "Other" — do not invent categories
+- Each skill string is one skill — never a comma-separated string inside one entry
 - languages must be an array of plain strings with proficiency in parentheses (e.g. "English (Native)", "Spanish (Conversational)"), one language per entry — not objects or comma-separated strings
 - Return ONLY valid JSON. No explanations, corrections, markdown, or commentary inside the JSON
 
 Example project entry:
 { "id": "uuid", "name": "Paydee E - Financing System", "bullets": ["Developed online loan application workflows with automated document generation and reporting, reducing manual effort and improving compliance."], "technologies": [".NET Core", "MVC"] }
+
+Example skills (categorized):
+[{ "id": "uuid", "name": "Frontend", "skills": ["React", "TypeScript"] }, { "id": "uuid", "name": "Backend", "skills": ["Node.js"] }, { "id": "uuid", "name": "Other", "skills": [] }]
+
+Example skills (uncategorized source → Other):
+[{ "id": "uuid", "name": "Other", "skills": ["React", "Node.js", "SQL", "Git"] }]
 
 Resume text:
 ---
@@ -112,7 +141,7 @@ Metrics-driven mode guidance:
     : `Resume instructions:
 1. Rewrite the professional summary to align with the role using only truthful experience
 2. Reorder and reword experience bullets to highlight relevant skills and achievements the candidate actually has
-3. Adjust skills list to emphasize job-relevant skills the candidate already has — do NOT add skills from the job description unless they clearly appear in experience, projects, or the existing skills list
+3. Adjust skills (keep category structure: Frontend, Backend, Database, Deployment, Tools, Other) to emphasize job-relevant skills the candidate already has — do NOT add skills from the job description unless they clearly appear in experience, projects, or the existing skills list. Preserve category names; move skills between categories only when clearly appropriate.
 4. Keep the same structure and all id fields unchanged
 5. Do NOT fabricate experience, companies, credentials, or technologies
 6. If the job asks for skills the candidate lacks, emphasize transferable strengths instead of claiming those skills`;
@@ -140,6 +169,7 @@ Cover letter instructions:
 8. Cover letter must not mention any excluded skills/topics listed above
 9. If "what excites the candidate" notes are provided, include genuine enthusiasm in the cover letter
 10. If skill gap notes are provided, address gaps honestly with transferable strengths — never fabricate qualifications
+${SHARED_COVER_LETTER_WRITING_RULES}
 
 ATS-friendly output requirements (apply to the tailored resume):
 - Use standard section headings and a parseable single-column layout (no tables, columns, or graphics)
@@ -226,6 +256,7 @@ Cover letter instructions:
 4. Do not mention any excluded skills/topics listed above
 5. If "what excites the candidate" notes are provided, include genuine enthusiasm
 6. If skill gap notes are provided, address gaps honestly with transferable strengths
+${SHARED_COVER_LETTER_WRITING_RULES}
 
 Return JSON with this exact structure:
 {
@@ -278,6 +309,7 @@ Rules:
 - Return the COMPLETE letter as plain text (not JSON object with fields)
 - Preserve the candidate's facts; do not invent employers, roles, or skills
 - Keep a natural letter structure (you may keep or lightly refresh greeting and sign-off)
+${SHARED_COVER_LETTER_WRITING_RULES}
 - Return ONLY JSON: { "coverLetter": "<full rewritten letter text>" }`;
 }
 

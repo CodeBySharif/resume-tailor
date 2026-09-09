@@ -1,4 +1,5 @@
 import type { Resume } from "@/lib/resume-schema";
+import { flattenSkills, hasAnySkills } from "@/lib/resume-schema";
 
 const MONTH_LABELS = [
   "January",
@@ -58,7 +59,7 @@ export function buildAtsPrecheckHints(resume: Resume): AtsPrecheckHints {
   const emptySections: string[] = [];
   if (!resume.summary?.trim()) emptySections.push("summary");
   if (resume.experience.length === 0) emptySections.push("experience");
-  if (resume.skills.length === 0) emptySections.push("skills");
+  if (!hasAnySkills(resume.skills)) emptySections.push("skills");
   if (resume.education.length === 0) emptySections.push("education");
 
   const { todayYearMonth, todayLabel } = getAtsTodayContext();
@@ -67,7 +68,7 @@ export function buildAtsPrecheckHints(resume: Resume): AtsPrecheckHints {
     contactComplete: missingContactFields.length === 0,
     missingContactFields,
     experienceBulletCount,
-    skillsCount: resume.skills.length,
+    skillsCount: flattenSkills(resume.skills).length,
     summaryWordCount: resume.summary?.trim()
       ? resume.summary.trim().split(/\s+/).length
       : 0,
