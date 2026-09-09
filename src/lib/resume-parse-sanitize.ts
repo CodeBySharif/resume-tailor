@@ -1,5 +1,5 @@
 import { normalizePrintableText } from "./text-normalize";
-import type { Resume } from "./resume-schema";
+import { flattenSkills, type Resume } from "./resume-schema";
 
 function splitListTokens(value: string): string[] {
   return value
@@ -120,7 +120,7 @@ export function resumeHasParseArtifacts(resume: Resume): boolean {
       ...p.bullets,
       ...(p.technologies ?? []),
     ]),
-    ...resume.skills,
+    ...flattenSkills(resume.skills),
     ...resume.languages,
   ];
   return fields.some((value) => containsLlmJsonArtifact(value));

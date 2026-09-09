@@ -10,7 +10,13 @@ import {
 } from "@react-pdf/renderer";
 import type { ReactNode } from "react";
 import type { Resume, ResumeHeader } from "./resume-schema";
-import { formatProjectTechBullet, getProjectBullets } from "./resume-schema";
+import {
+  formatEducationCredential,
+  formatProjectTechBullet,
+  formatSkillCategoriesForDisplay,
+  getProjectBullets,
+  hasAnySkills,
+} from "./resume-schema";
 import { formatDateRange } from "./date-utils";
 import { formatExperienceCompanyLine } from "./experience-format";
 import { formatDisplayName, formatDisplayTitle } from "./format-name";
@@ -153,6 +159,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 0,
     marginBottom: 0,
+    lineHeight: 1.25,
+  },
+  skillCategory: {
+    fontSize: 10,
+    fontFamily: "Helvetica",
+    fontWeight: "bold",
+    marginTop: 0,
+    marginBottom: 0,
+    lineHeight: 1.25,
+  },
+  skillItems: {
+    fontSize: 10,
+    marginTop: 1,
+    marginBottom: 4,
+    marginLeft: 10,
     lineHeight: 1.25,
   },
   projectDesc: {
@@ -355,9 +376,7 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
               >
                 <View style={styles.entryHeader}>
                   <Text style={styles.entryTitle}>
-                    {sanitizePdfText(
-                      `${edu.degree}${edu.field ? ` in ${edu.field}` : ""}`
-                    )}
+                    {sanitizePdfText(edu.institution)}
                   </Text>
                   <Text style={styles.entryDate}>
                     {sanitizePdfText(formatDateRange(edu.startDate, edu.endDate))}
@@ -365,7 +384,9 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
                 </View>
                 <Text style={[styles.entrySubtitle, styles.contentSpaced]}>
                   {sanitizePdfText(
-                    `${edu.institution}${edu.gpa ? ` | GPA: ${edu.gpa}` : ""}`
+                    `${formatEducationCredential(edu.degree, edu.field)}${
+                      edu.gpa ? ` | GPA: ${edu.gpa}` : ""
+                    }`
                   )}
                 </Text>
               </View>
@@ -373,9 +394,18 @@ export function ResumePDFDocument({ resume }: { resume: Resume }) {
           </PdfResumeSection>
         ) : null}
 
-        {resume.skills.length > 0 ? (
+        {hasAnySkills(resume.skills) ? (
           <PdfResumeSection title="Skills">
-            <Text style={styles.skills}>{sanitizePdfText(resume.skills.join(" • "))}</Text>
+            {formatSkillCategoriesForDisplay(resume.skills).map((row) => (
+              <View key={row.name} wrap={false}>
+                <Text style={styles.skillCategory}>
+                  {sanitizePdfText(row.name)}
+                </Text>
+                <Text style={styles.skillItems}>
+                  {sanitizePdfText(row.skillsLine)}
+                </Text>
+              </View>
+            ))}
           </PdfResumeSection>
         ) : null}
 

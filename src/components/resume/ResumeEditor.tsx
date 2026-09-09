@@ -15,6 +15,7 @@ import { createId, getProjectBullets, projectDescriptionFromBullets } from "@/li
 import { moveArrayItem } from "@/lib/array-utils";
 import { isPresentDate } from "@/lib/date-utils";
 import { StringListField } from "@/components/ui/string-list-field";
+import { SkillCategoriesField } from "@/components/ui/skill-categories-field";
 import { LanguageListField } from "@/components/ui/language-list-field";
 import { getResumeBuildMissingFields } from "@/lib/resume-validation";
 import { useResumeStore } from "@/store/resume-store";
@@ -808,11 +809,8 @@ export function ResumeEditor({
           <Separator />
 
           <FormSection title="Skills">
-            <StringListField
-              id="skills"
-              label="Skills"
-              placeholder="e.g. TypeScript"
-              values={resume.skills}
+            <SkillCategoriesField
+              categories={resume.skills}
               onChange={(skills) => updateResume((r) => ({ ...r, skills }))}
             />
           </FormSection>

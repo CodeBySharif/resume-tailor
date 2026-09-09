@@ -57,13 +57,32 @@ export interface CustomSection {
   content: string;
 }
 
+/** Named skill group — defaults: Frontend, Backend, Database, Deployment, Tools, Other. */
+export interface SkillCategory {
+  id: string;
+  name: string;
+  skills: string[];
+}
+
+export const DEFAULT_SKILL_CATEGORY_NAMES = [
+  "Frontend",
+  "Backend",
+  "Database",
+  "Deployment",
+  "Tools",
+  "Other",
+] as const;
+
+export type DefaultSkillCategoryName =
+  (typeof DEFAULT_SKILL_CATEGORY_NAMES)[number];
+
 export interface Resume {
   header: ResumeHeader;
   summary: string;
   experience: Experience[];
   projects: Project[];
   education: Education[];
-  skills: string[];
+  skills: SkillCategory[];
   languages: string[];
   customSections: CustomSection[];
 }
@@ -117,6 +136,208 @@ export function createId(): string {
   return crypto.randomUUID();
 }
 
+export function createDefaultSkillCategories(): SkillCategory[] {
+  return DEFAULT_SKILL_CATEGORY_NAMES.map((name) => ({
+    id: createId(),
+    name,
+    skills: [],
+  }));
+}
+
+/** Flat list of every skill across categories (for ATS counts, searches). */
+export function flattenSkills(categories: SkillCategory[]): string[] {
+  return categories.flatMap((c) =>
+    c.skills.map((s) => normalizePrintableText(s)).filter(Boolean)
+  );
+}
+
+export function hasAnySkills(categories: SkillCategory[]): boolean {
+  return categories.some((c) => c.skills.some((s) => s.trim()));
+}
+
+/** Resume/PDF display — category label + comma-separated skills for indented layout. */
+export function formatSkillCategoriesForDisplay(
+  categories: SkillCategory[]
+): { name: string; skillsLine: string }[] {
+  return categories
+    .map((c) => {
+      const skills = c.skills
+        .map((s) => normalizePrintableText(s))
+        .filter(Boolean);
+      if (!skills.length || !c.name.trim()) return null;
+      return {
+        name: c.name.trim(),
+        skillsLine: skills.join(", "),
+      };
+    })
+    .filter((row): row is { name: string; skillsLine: string } => Boolean(row));
+}
+
+/** @deprecated Prefer formatSkillCategoriesForDisplay for indented layout */
+export function formatSkillCategoryLines(
+  categories: SkillCategory[]
+): string[] {
+  return formatSkillCategoriesForDisplay(categories).map(
+    (row) => `${row.name}: ${row.skillsLine}`
+  );
+}
+
+/** Degree line: "Bachelor of Computer Science (Information Technology)" */
+export function formatEducationCredential(
+  degree: string,
+  field?: string | null
+): string {
+  const level = normalizePrintableText(degree);
+  const study = normalizePrintableText(field ?? "");
+  if (!level && !study) return "";
+  if (!study) return level;
+  if (!level) return study;
+  // Avoid "Degree (Degree)" if field already embedded
+  if (level.toLowerCase().includes(study.toLowerCase())) return level;
+  return `${level} (${study})`;
+}
+
+function matchDefaultCategoryName(name: string): string | null {
+  const key = name.trim().toLowerCase();
+  const found = DEFAULT_SKILL_CATEGORY_NAMES.find(
+    (n) => n.toLowerCase() === key
+  );
+  return found ?? null;
+}
+
+/**
+ * Accepts legacy flat string[] (→ Other) or categorized objects from the LLM.
+ * Always returns the default categories first, then any custom ones.
+ */
+export function normalizeSkillCategories(raw: unknown): SkillCategory[] {
+  const defaults = createDefaultSkillCategories();
+
+  if (raw == null) return defaults;
+
+  if (Array.isArray(raw)) {
+    // Detect categorized objects: { name, skills } or { category, items }
+    const categorized = raw.filter(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        !Array.isArray(item) &&
+        (("skills" in item && Array.isArray((item as SkillCategory).skills)) ||
+          ("items" in item && Array.isArray((item as { items: unknown }).items)))
+    ) as Array<Record<string, unknown>>;
+
+    // Legacy / uncategorized: ["React", "Node"] → Other
+    if (categorized.length === 0) {
+      const skills = coerceResumeStringList(raw);
+      return defaults.map((cat) =>
+        cat.name === "Other" ? { ...cat, skills } : cat
+      );
+    }
+
+    const byDefault = new Map<
+      string,
+      { id?: string; skills: string[] }
+    >(DEFAULT_SKILL_CATEGORY_NAMES.map((n) => [n, { skills: [] }]));
+    const custom: SkillCategory[] = [];
+
+    for (const entry of categorized) {
+      const rawName = coerceResumeString(
+        entry.name ?? entry.category ?? entry.title ?? ""
+      );
+      const skillList = coerceResumeStringList(
+        entry.skills ?? entry.items ?? entry.values ?? []
+      );
+      const entryId =
+        typeof entry.id === "string" && entry.id ? entry.id : undefined;
+      if (!skillList.length && !rawName) continue;
+
+      const defaultName = matchDefaultCategoryName(rawName);
+      if (defaultName) {
+        const prev = byDefault.get(defaultName) ?? { skills: [] };
+        byDefault.set(defaultName, {
+          id: prev.id ?? entryId,
+          skills: [...prev.skills, ...skillList],
+        });
+      } else if (rawName) {
+        custom.push({
+          id: entryId ?? createId(),
+          name: rawName,
+          skills: skillList,
+        });
+      } else {
+        const prev = byDefault.get("Other") ?? { skills: [] };
+        byDefault.set("Other", {
+          id: prev.id ?? entryId,
+          skills: [...prev.skills, ...skillList],
+        });
+      }
+    }
+
+    const leftover = coerceResumeStringList(
+      raw.filter((item) => typeof item === "string")
+    );
+    if (leftover.length) {
+      const prev = byDefault.get("Other") ?? { skills: [] };
+      byDefault.set("Other", {
+        id: prev.id,
+        skills: [...prev.skills, ...leftover],
+      });
+    }
+
+    const mergedDefaults = DEFAULT_SKILL_CATEGORY_NAMES.map((name) => {
+      const bucket = byDefault.get(name) ?? { skills: [] };
+      return {
+        id: bucket.id ?? createId(),
+        name,
+        skills: [...new Set(bucket.skills)],
+      };
+    });
+
+    return [...mergedDefaults, ...custom];
+  }
+
+  // Single object map: { Frontend: [...], Backend: [...] }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    const byDefault = new Map<string, string[]>(
+      DEFAULT_SKILL_CATEGORY_NAMES.map((n) => [n, []])
+    );
+    const custom: SkillCategory[] = [];
+
+    for (const [key, value] of Object.entries(obj)) {
+      const skillList = coerceResumeStringList(value);
+      if (!skillList.length) continue;
+      const defaultName = matchDefaultCategoryName(key);
+      if (defaultName) {
+        byDefault.set(defaultName, [
+          ...(byDefault.get(defaultName) ?? []),
+          ...skillList,
+        ]);
+      } else {
+        custom.push({ id: createId(), name: key, skills: skillList });
+      }
+    }
+
+    return [
+      ...DEFAULT_SKILL_CATEGORY_NAMES.map((name) => ({
+        id: createId(),
+        name,
+        skills: [...new Set(byDefault.get(name) ?? [])],
+      })),
+      ...custom,
+    ];
+  }
+
+  // Plain comma-separated string
+  if (typeof raw === "string") {
+    const skills = coerceResumeStringList(raw);
+    return defaults.map((cat) =>
+      cat.name === "Other" ? { ...cat, skills } : cat
+    );
+  }
+
+  return defaults;
+}
+
 export function createEmptyResume(): Resume {
   return {
     header: {
@@ -134,7 +355,7 @@ export function createEmptyResume(): Resume {
     experience: [],
     projects: [],
     education: [],
-    skills: [],
+    skills: createDefaultSkillCategories(),
     languages: [],
     customSections: [],
   };
@@ -178,7 +399,7 @@ export function createAtsScaffoldResume(): Resume {
         gpa: "",
       },
     ],
-    skills: [],
+    skills: createDefaultSkillCategories(),
     languages: [],
     customSections: [],
   };
@@ -249,14 +470,36 @@ export function createTemplateResume(): Resume {
       },
     ],
     skills: [
-      "JavaScript",
-      "TypeScript",
-      "React",
-      "Node.js",
-      "Python",
-      "AWS",
-      "PostgreSQL",
-      "Docker",
+      {
+        id: createId(),
+        name: "Frontend",
+        skills: ["JavaScript", "TypeScript", "React"],
+      },
+      {
+        id: createId(),
+        name: "Backend",
+        skills: ["Node.js", "Python"],
+      },
+      {
+        id: createId(),
+        name: "Database",
+        skills: ["PostgreSQL"],
+      },
+      {
+        id: createId(),
+        name: "Deployment",
+        skills: ["AWS", "Docker"],
+      },
+      {
+        id: createId(),
+        name: "Tools",
+        skills: [],
+      },
+      {
+        id: createId(),
+        name: "Other",
+        skills: [],
+      },
     ],
     languages: ["English (Native)", "Spanish (Conversational)"],
     customSections: [],
@@ -280,7 +523,7 @@ export const RESUME_JSON_SCHEMA = `{
   "experience": [{ "id": "string", "company": "string", "role": "string", "location": "string?", "startDate": "string", "endDate": "string", "bullets": ["string"] }],
   "projects": [{ "id": "string", "name": "string", "bullets": ["string"], "technologies": ["string"]?, "url": "string?" }],
   "education": [{ "id": "string", "institution": "string", "degree": "string", "field": "string?", "startDate": "string", "endDate": "string", "gpa": "string?" }],
-  "skills": ["string"],
+  "skills": [{ "id": "string", "name": "Frontend|Backend|Database|Deployment|Tools|Other|<custom>", "skills": ["string"] }],
   "languages": ["string"],
   "customSections": [{ "id": "string", "title": "string", "content": "string" }]
 }`;
@@ -454,7 +697,7 @@ export function normalizeResume(
       endDate: parseToMonthYear(e.endDate ?? ""),
       gpa: normalizePrintableText(e.gpa ?? ""),
     })),
-    skills: coerceResumeStringList(data.skills),
+    skills: normalizeSkillCategories(data.skills),
     languages: coerceResumeStringList(data.languages),
     customSections: (data.customSections ?? []).map((s) => ({
       id: s.id || createId(),

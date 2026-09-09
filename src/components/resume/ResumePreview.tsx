@@ -1,7 +1,13 @@
 "use client";
 
 import type { Resume } from "@/lib/resume-schema";
-import { formatProjectTechBullet, getProjectBullets } from "@/lib/resume-schema";
+import {
+  formatEducationCredential,
+  formatProjectTechBullet,
+  formatSkillCategoriesForDisplay,
+  getProjectBullets,
+  hasAnySkills,
+} from "@/lib/resume-schema";
 import { formatExperienceCompanyLine } from "@/lib/experience-format";
 import { formatDateRange } from "@/lib/date-utils";
 import { RESUME_SPACE_EM } from "@/lib/resume-spacing";
@@ -156,8 +162,7 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
               <ContentBlock>
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-[10pt] font-semibold leading-none">
-                    {edu.degree}
-                    {edu.field ? ` in ${edu.field}` : ""}
+                    {edu.institution}
                   </span>
                   <span className="shrink-0 text-[9pt] leading-none text-gray-600">
                     {formatDateRange(edu.startDate, edu.endDate)}
@@ -166,7 +171,7 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
               </ContentBlock>
               <ContentBlock spaced>
                 <p className="leading-tight text-gray-700">
-                  {edu.institution}
+                  {formatEducationCredential(edu.degree, edu.field)}
                   {edu.gpa ? ` | GPA: ${edu.gpa}` : ""}
                 </p>
               </ContentBlock>
@@ -175,9 +180,20 @@ export function ResumePreview({ resume, className }: ResumePreviewProps) {
         </ResumeSection>
       )}
 
-      {resume.skills.length > 0 && (
+      {hasAnySkills(resume.skills) && (
         <ResumeSection title="Skills">
-          <p>{resume.skills.join(" • ")}</p>
+          <div className="space-y-1.5">
+            {formatSkillCategoriesForDisplay(resume.skills).map((row) => (
+              <div key={row.name}>
+                <p className="text-[10pt] font-semibold leading-tight">
+                  {row.name}
+                </p>
+                <p className="pl-3 leading-tight text-gray-800">
+                  {row.skillsLine}
+                </p>
+              </div>
+            ))}
+          </div>
         </ResumeSection>
       )}
 
